@@ -1,0 +1,105 @@
+import type { ApiClientSubResourceOptions } from '../base/api_client';
+import { ResourceClient } from '../base/resource_client';
+import { ActorEnvVarClient } from './actor_env_var';
+import { ActorEnvVarCollectionClient } from './actor_env_var_collection';
+/**
+ * Client for managing a specific Actor version.
+ *
+ * Actor versions represent specific builds or snapshots of an Actor's code. This client provides
+ * methods to get, update, and delete versions, as well as manage their environment variables.
+ *
+ * @example
+ * ```javascript
+ * const client = new ApifyClient({ token: 'my-token' });
+ * const actorClient = client.actor('my-actor-id');
+ *
+ * // Get a specific version
+ * const versionClient = actorClient.version('0.1');
+ * const version = await versionClient.get();
+ *
+ * // Update version
+ * await versionClient.update({ buildTag: 'latest' });
+ * ```
+ *
+ * @see https://docs.apify.com/api/v2/act-versions-get
+ */
+export declare class ActorVersionClient extends ResourceClient {
+    /**
+     * @hidden
+     */
+    constructor(options: ApiClientSubResourceOptions);
+    /**
+     * Retrieves the Actor version.
+     *
+     * @returns The Actor version object, or `undefined` if it does not exist.
+     * @see https://docs.apify.com/api/v2/act-version-get
+     */
+    get(): Promise<FinalActorVersion | undefined>;
+    /**
+     * Updates the Actor version with the specified fields.
+     *
+     * @param newFields - Fields to update.
+     * @returns The updated Actor version object.
+     * @see https://docs.apify.com/api/v2/act-version-put
+     */
+    update(newFields: ActorVersion): Promise<FinalActorVersion>;
+    /**
+     * Deletes the Actor version.
+     *
+     * @see https://docs.apify.com/api/v2/act-version-delete
+     */
+    delete(): Promise<void>;
+    /**
+     * Returns a client for the specified environment variable of this Actor version.
+     *
+     * @param envVarName - Name of the environment variable.
+     * @returns A client for the environment variable.
+     * @see https://docs.apify.com/api/v2/act-version-env-var-get
+     */
+    envVar(envVarName: string): ActorEnvVarClient;
+    /**
+     * Returns a client for the environment variables of this Actor version.
+     *
+     * @returns A client for the Actor version's environment variables.
+     * @see https://docs.apify.com/api/v2/act-version-env-vars-get
+     */
+    envVars(): ActorEnvVarCollectionClient;
+}
+export interface BaseActorVersion<SourceType extends ActorSourceType> {
+    versionNumber?: string;
+    sourceType: SourceType;
+    envVars?: ActorEnvironmentVariable[];
+    applyEnvVarsToBuild?: boolean;
+    buildTag?: string;
+}
+export interface ActorVersionSourceFiles extends BaseActorVersion<ActorSourceType.SourceFiles> {
+    sourceFiles: ActorVersionSourceFile[];
+}
+export interface ActorVersionSourceFile {
+    name: string;
+    format: 'TEXT' | 'BASE64';
+    content: string;
+}
+export interface ActorVersionGitRepo extends BaseActorVersion<ActorSourceType.GitRepo> {
+    gitRepoUrl: string;
+}
+export interface ActorVersionTarball extends BaseActorVersion<ActorSourceType.Tarball> {
+    tarballUrl: string;
+}
+export interface ActorVersionGitHubGist extends BaseActorVersion<ActorSourceType.GitHubGist> {
+    gitHubGistUrl: string;
+}
+export declare enum ActorSourceType {
+    SourceFiles = "SOURCE_FILES",
+    GitRepo = "GIT_REPO",
+    Tarball = "TARBALL",
+    GitHubGist = "GITHUB_GIST"
+}
+export interface ActorEnvironmentVariable {
+    name?: string;
+    value?: string;
+    isSecret?: boolean;
+}
+export type ActorVersion = ActorVersionSourceFiles | ActorVersionGitRepo | ActorVersionTarball | ActorVersionGitHubGist;
+export type FinalActorVersion = ActorVersion & Required<Pick<ActorVersion, 'versionNumber' | 'buildTag'>>;
+//# sourceMappingURL=actor_version.d.ts.map

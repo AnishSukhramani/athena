@@ -1,0 +1,31 @@
+{
+  "name": "jobportalscout",
+  "version": "0.1.0",
+  "description": "Lead generation agent for dental/medical front desk hiring opportunities",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "scout": "node src/index.js",
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "lead-generation",
+    "job-scraper",
+    "dental",
+    "medical"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@hyperbrowser/agent": "^1.1.2",
+    "@hyperbrowser/sdk": "^0.87.0",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0",
+    "zod": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

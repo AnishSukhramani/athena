@@ -1,0 +1,20 @@
+import { BaseService } from "../base";
+import { FetchParams, FetchResponse } from "../../types/web/fetch";
+import { WebSearchParams, WebSearchResponse } from "../../types/web/search";
+import { BatchFetchService } from "./batch-fetch";
+import { WebCrawlService } from "./crawl";
+export declare class WebService extends BaseService {
+    readonly batchFetch: BatchFetchService;
+    readonly crawl: WebCrawlService;
+    constructor(apiKey: string, baseUrl: string, timeout: number);
+    /**
+     * Fetch a URL and extract content
+     * @param params The parameters for the fetch request
+     */
+    fetch(params: FetchParams): Promise<FetchResponse>;
+    /**
+     * Search the web
+     * @param params The parameters for the search request
+     */
+    search(params: WebSearchParams): Promise<WebSearchResponse>;
+}

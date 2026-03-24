@@ -1,0 +1,313 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SandboxesService = exports.SandboxHandle = void 0;
+const client_1 = require("../client");
+const files_1 = require("../sandbox/files");
+const base_1 = require("../sandbox/base");
+const process_1 = require("../sandbox/process");
+const terminal_1 = require("../sandbox/terminal");
+const base_2 = require("./base");
+const RUNTIME_SESSION_REFRESH_BUFFER_MS = 60000;
+const buildSandboxExposedUrl = (runtime, port) => {
+    const url = new URL(runtime.baseUrl);
+    url.hostname = `${port}-${url.hostname}`;
+    return url.toString().replace(/\/$/, "");
+};
+class SandboxHandle {
+    constructor(service, detail) {
+        this.service = service;
+        this.detail = detail;
+        this.runtimeSession = SandboxHandle.toRuntimeSession(detail);
+        this.transport = new base_1.RuntimeTransport((forceRefresh) => this.resolveRuntimeConnection(forceRefresh), service.runtimeTimeout, service.runtimeProxyOverride);
+        this.processes = new process_1.SandboxProcessesApi(this.transport);
+        this.files = new files_1.SandboxFilesApi(this.transport, () => this.resolveRuntimeSocketConnectionInfo(), service.runtimeProxyOverride);
+        this.terminal = new terminal_1.SandboxTerminalApi(this.transport, () => this.resolveRuntimeSocketConnectionInfo(), service.runtimeProxyOverride);
+        this.pty = this.terminal;
+    }
+    get id() {
+        return this.detail.id;
+    }
+    get status() {
+        return this.detail.status;
+    }
+    get region() {
+        return this.detail.region;
+    }
+    get runtime() {
+        return this.detail.runtime;
+    }
+    get tokenExpiresAt() {
+        return this.detail.tokenExpiresAt;
+    }
+    get sessionUrl() {
+        return this.detail.sessionUrl;
+    }
+    toJSON() {
+        return { ...this.detail };
+    }
+    async info() {
+        const detail = await this.service.getDetail(this.id);
+        this.hydrate(detail);
+        return this.toJSON();
+    }
+    async refresh() {
+        await this.info();
+        return this;
+    }
+    async connect() {
+        await this.ensureRuntimeSession(true);
+        return this;
+    }
+    async stop() {
+        const response = await this.service.stop(this.id);
+        this.clearRuntimeSession("closed");
+        return response;
+    }
+    async createMemorySnapshot(params = {}) {
+        return this.service.createMemorySnapshot(this.id, params);
+    }
+    async expose(params) {
+        return this.service.expose(this.id, params, this.runtime);
+    }
+    getExposedUrl(port) {
+        return buildSandboxExposedUrl(this.runtime, port);
+    }
+    async exec(input) {
+        const params = typeof input === "string"
+            ? {
+                command: input,
+            }
+            : input;
+        return this.processes.exec(params);
+    }
+    async getProcess(processId) {
+        return this.processes.get(processId);
+    }
+    hydrate(detail) {
+        this.detail = detail;
+        this.runtimeSession = SandboxHandle.toRuntimeSession(detail);
+    }
+    async resolveRuntimeConnection(forceRefresh = false) {
+        const session = await this.ensureRuntimeSession(forceRefresh);
+        return {
+            sandboxId: this.id,
+            baseUrl: session.runtime.baseUrl,
+            token: session.token,
+        };
+    }
+    async resolveRuntimeSocketConnectionInfo() {
+        const session = await this.ensureRuntimeSession();
+        return {
+            sandboxId: this.id,
+            baseUrl: session.runtime.baseUrl,
+            token: session.token,
+        };
+    }
+    isRuntimeSessionExpiring() {
+        if (!this.runtimeSession?.tokenExpiresAt) {
+            return false;
+        }
+        const expiresAt = Date.parse(this.runtimeSession.tokenExpiresAt);
+        if (Number.isNaN(expiresAt)) {
+            return false;
+        }
+        return expiresAt - Date.now() <= RUNTIME_SESSION_REFRESH_BUFFER_MS;
+    }
+    async ensureRuntimeSession(forceRefresh = false) {
+        this.assertRuntimeAvailable();
+        if (!forceRefresh && this.runtimeSession && !this.isRuntimeSessionExpiring()) {
+            return { ...this.runtimeSession };
+        }
+        const detail = await this.service.getDetail(this.id);
+        this.hydrate(detail);
+        if (!this.runtimeSession) {
+            throw new client_1.HyperbrowserError(`Sandbox ${this.id} is not running`, {
+                statusCode: 409,
+                code: "sandbox_not_running",
+                retryable: false,
+                service: "runtime",
+            });
+        }
+        return { ...this.runtimeSession };
+    }
+    applyRuntimeSession(session) {
+        this.runtimeSession = { ...session };
+        this.detail = {
+            ...this.detail,
+            status: session.status,
+            region: session.region,
+            runtime: session.runtime,
+            token: session.token,
+            tokenExpiresAt: session.tokenExpiresAt,
+        };
+    }
+    clearRuntimeSession(status = this.detail.status) {
+        this.runtimeSession = null;
+        this.detail = {
+            ...this.detail,
+            status,
+            token: null,
+            tokenExpiresAt: null,
+        };
+    }
+    assertRuntimeAvailable() {
+        if (this.detail.status === "closed" || this.detail.status === "error") {
+            throw new client_1.HyperbrowserError(`Sandbox ${this.id} is not running`, {
+                statusCode: 409,
+                code: "sandbox_not_running",
+                retryable: false,
+                service: "runtime",
+            });
+        }
+    }
+    static toRuntimeSession(detail) {
+        if (!detail.token) {
+            return null;
+        }
+        return {
+            sandboxId: detail.id,
+            status: detail.status,
+            region: detail.region,
+            token: detail.token,
+            tokenExpiresAt: detail.tokenExpiresAt,
+            runtime: detail.runtime,
+        };
+    }
+}
+exports.SandboxHandle = SandboxHandle;
+class SandboxesService extends base_2.BaseService {
+    constructor(apiKey, baseUrl, timeout, runtimeProxyOverride) {
+        super(apiKey, baseUrl, timeout);
+        this.runtimeTimeout = timeout;
+        this.runtimeProxyOverride = runtimeProxyOverride;
+    }
+    async create(params) {
+        const detail = await this.createDetail(params);
+        return this.attach(detail);
+    }
+    async get(id) {
+        const detail = await this.getDetail(id);
+        return this.attach(detail);
+    }
+    async connect(id) {
+        const handle = await this.get(id);
+        await handle.connect();
+        return handle;
+    }
+    async list(params = {}) {
+        try {
+            return await this.request("/sandboxes", undefined, {
+                status: params.status,
+                page: params.page,
+                limit: params.limit,
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError("Failed to list sandboxes", undefined);
+        }
+    }
+    async listImages() {
+        try {
+            return await this.request("/images");
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError("Failed to list sandbox images", undefined);
+        }
+    }
+    async listSnapshots(params = {}) {
+        try {
+            return await this.request("/snapshots", undefined, {
+                status: params.status,
+                limit: params.limit,
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError("Failed to list sandbox snapshots", undefined);
+        }
+    }
+    async stop(id) {
+        try {
+            return await this.request(`/sandbox/${id}/stop`, {
+                method: "PUT",
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError(`Failed to stop sandbox ${id}`, undefined);
+        }
+    }
+    async getDetail(id) {
+        try {
+            return await this.request(`/sandbox/${id}`);
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError(`Failed to get sandbox ${id}`, undefined);
+        }
+    }
+    attach(detail) {
+        return new SandboxHandle(this, detail);
+    }
+    async createMemorySnapshot(id, params = {}) {
+        try {
+            return await this.request(`/sandbox/${id}/snapshot`, {
+                method: "POST",
+                body: JSON.stringify(params),
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError(`Failed to create memory snapshot for sandbox ${id}`, undefined);
+        }
+    }
+    async expose(id, params, runtime) {
+        try {
+            const response = await this.request(`/sandbox/${id}/expose`, {
+                method: "POST",
+                body: JSON.stringify(params),
+            });
+            const targetRuntime = runtime ?? (await this.getDetail(id)).runtime;
+            return {
+                port: response.port,
+                auth: response.auth,
+                url: buildSandboxExposedUrl(targetRuntime, response.port),
+            };
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError(`Failed to expose port ${params.port} for sandbox ${id}`);
+        }
+    }
+    async createDetail(params) {
+        try {
+            return await this.request("/sandbox", {
+                method: "POST",
+                body: JSON.stringify(params),
+            });
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError) {
+                throw error;
+            }
+            throw new client_1.HyperbrowserError("Failed to create sandbox", undefined);
+        }
+    }
+}
+exports.SandboxesService = SandboxesService;

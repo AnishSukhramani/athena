@@ -1,0 +1,267 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.StreamedLog = exports.LoggerActorRedirect = exports.LogClient = void 0;
+const tslib_1 = require("tslib");
+const ansi_colors_1 = tslib_1.__importDefault(require("ansi-colors"));
+const log_1 = require("@apify/log");
+const resource_client_1 = require("../base/resource_client");
+const utils_1 = require("../utils");
+/**
+ * Client for accessing Actor run or build logs.
+ *
+ * Provides methods to retrieve logs as text or stream them in real-time. Logs can be accessed
+ * for both running and finished Actor runs and builds.
+ *
+ * @example
+ * ```javascript
+ * const client = new ApifyClient({ token: 'my-token' });
+ * const runClient = client.run('my-run-id');
+ *
+ * // Get the log content
+ * const log = await runClient.log().get();
+ * console.log(log);
+ *
+ * // Stream the log in real-time
+ * const stream = await runClient.log().stream();
+ * stream.on('line', (line) => console.log(line));
+ * ```
+ *
+ * @see https://docs.apify.com/platform/actors/running/runs-and-builds#logging
+ */
+class LogClient extends resource_client_1.ResourceClient {
+    /**
+     * @hidden
+     */
+    constructor(options) {
+        super({
+            resourcePath: 'logs',
+            ...options,
+        });
+    }
+    /**
+     * Retrieves the log as a string.
+     *
+     * @param options - Log retrieval options.
+     * @param options.raw - If `true`, returns raw log content without any processing. Default is `false`.
+     * @returns The log content as a string, or `undefined` if it does not exist.
+     * @see https://docs.apify.com/api/v2/log-get
+     */
+    async get(options = {}) {
+        const requestOpts = {
+            url: this._url(),
+            method: 'GET',
+            params: this._params(options),
+        };
+        try {
+            const response = await this.httpClient.call(requestOpts);
+            return (0, utils_1.cast)(response.data);
+        }
+        catch (err) {
+            (0, utils_1.catchNotFoundOrThrow)(err);
+        }
+        return undefined;
+    }
+    /**
+     * Retrieves the log as a Readable stream. Only works in Node.js.
+     *
+     * @param options - Log retrieval options.
+     * @param options.raw - If `true`, returns raw log content without any processing. Default is `false`.
+     * @returns The log content as a Readable stream, or `undefined` if it does not exist.
+     * @see https://docs.apify.com/api/v2/log-get
+     */
+    async stream(options = {}) {
+        const params = {
+            stream: true,
+            raw: options.raw,
+        };
+        const requestOpts = {
+            url: this._url(),
+            method: 'GET',
+            params: this._params(params),
+            responseType: 'stream',
+        };
+        try {
+            const response = await this.httpClient.call(requestOpts);
+            return (0, utils_1.cast)(response.data);
+        }
+        catch (err) {
+            (0, utils_1.catchNotFoundOrThrow)(err);
+        }
+        return undefined;
+    }
+}
+exports.LogClient = LogClient;
+/**
+ * Logger for redirected actor logs.
+ */
+class LoggerActorRedirect extends log_1.Logger {
+    constructor(options = {}) {
+        super({ skipTime: true, level: log_1.LogLevel.DEBUG, ...options });
+    }
+    _log(level, message, data, exception, opts = {}) {
+        if (level > this.options.level) {
+            return;
+        }
+        if (data || exception) {
+            throw new Error('Redirect logger does not use other arguments than level and message');
+        }
+        let { prefix } = opts;
+        prefix = prefix ? `${prefix}` : '';
+        let maybeDate = '';
+        if (!this.options.skipTime) {
+            maybeDate = `${new Date().toISOString().replace('Z', '').replace('T', ' ')} `;
+        }
+        const line = `${ansi_colors_1.default.gray(maybeDate)}${ansi_colors_1.default.cyan(prefix)}${message || ''}`;
+        // All redirected logs are logged at info level to avid any console specific formating for non-info levels,
+        // which have already been applied once to the original log. (For example error stack traces etc.)
+        this._outputWithConsole(log_1.LogLevel.INFO, line);
+        return line;
+    }
+}
+exports.LoggerActorRedirect = LoggerActorRedirect;
+/**
+ * Helper class for redirecting streamed Actor logs to another log.
+ */
+class StreamedLog {
+    constructor(options) {
+        Object.defineProperty(this, "destinationLog", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "streamBuffer", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: []
+        });
+        Object.defineProperty(this, "splitMarker", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: /(?:\n|^)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)/g
+        });
+        Object.defineProperty(this, "relevancyTimeLimit", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "logClient", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "streamingTask", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: null
+        });
+        Object.defineProperty(this, "stopLogging", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: false
+        });
+        const { toLog, logClient, fromStart = true } = options;
+        this.destinationLog = toLog;
+        this.logClient = logClient;
+        this.relevancyTimeLimit = fromStart ? null : new Date();
+    }
+    /**
+     * Start log redirection.
+     */
+    start() {
+        if (this.streamingTask) {
+            throw new Error('Streaming task already active');
+        }
+        this.stopLogging = false;
+        this.streamingTask = this.streamLog();
+    }
+    /**
+     * Stop log redirection.
+     */
+    async stop() {
+        if (!this.streamingTask) {
+            throw new Error('Streaming task is not active');
+        }
+        this.stopLogging = true;
+        try {
+            await this.streamingTask;
+        }
+        catch (err) {
+            if (!(err instanceof Error && err.name === 'AbortError')) {
+                throw err;
+            }
+        }
+        finally {
+            this.streamingTask = null;
+        }
+    }
+    /**
+     * Get log stream from response and redirect it to another log.
+     */
+    async streamLog() {
+        const logStream = await this.logClient.stream({ raw: true });
+        if (!logStream) {
+            return;
+        }
+        const lastChunkRemainder = await this.logStreamChunks(logStream);
+        // Process whatever is left when exiting. Maybe it is incomplete, maybe it is last log without EOL.
+        const lastMessage = Buffer.from(lastChunkRemainder).toString().trim();
+        if (lastMessage.length) {
+            this.destinationLog.info(lastMessage);
+        }
+    }
+    async logStreamChunks(logStream) {
+        // Chunk may be incomplete. Keep remainder for next chunk.
+        let previousChunkRemainder = new Uint8Array();
+        for await (const chunk of logStream) {
+            // Handle possible leftover incomplete line from previous chunk.
+            // Everything before last end of line is complete.
+            const chunkWithPreviousRemainder = new Uint8Array(previousChunkRemainder.length + chunk.length);
+            chunkWithPreviousRemainder.set(previousChunkRemainder, 0);
+            chunkWithPreviousRemainder.set(chunk, previousChunkRemainder.length);
+            const lastCompleteMessageIndex = chunkWithPreviousRemainder.lastIndexOf(0x0a);
+            previousChunkRemainder = chunkWithPreviousRemainder.slice(lastCompleteMessageIndex);
+            // Push complete part of the chunk to the buffer
+            this.streamBuffer.push(Buffer.from(chunkWithPreviousRemainder.slice(0, lastCompleteMessageIndex)));
+            this.logBufferContent();
+            // Keep processing the new data until stopped
+            if (this.stopLogging) {
+                break;
+            }
+        }
+        return previousChunkRemainder;
+    }
+    /**
+     * Parse the buffer and log complete messages.
+     */
+    logBufferContent() {
+        const allParts = Buffer.concat(this.streamBuffer).toString().split(this.splitMarker).slice(1);
+        // Parse the buffer parts into complete messages
+        const messageMarkers = allParts.filter((_, i) => i % 2 === 0);
+        const messageContents = allParts.filter((_, i) => i % 2 !== 0);
+        this.streamBuffer = [];
+        messageMarkers.forEach((marker, index) => {
+            const decodedMarker = marker;
+            const decodedContent = messageContents[index];
+            if (this.relevancyTimeLimit) {
+                // Log only relevant messages. Ignore too old log messages.
+                const logTime = new Date(decodedMarker);
+                if (logTime < this.relevancyTimeLimit) {
+                    return;
+                }
+            }
+            const message = decodedMarker + decodedContent;
+            // Original log level information is not available. Log all on info level. Log level could be guessed for
+            // some logs, but for any multiline logs such guess would be probably correct only for the first line.
+            this.destinationLog.info(message.trim());
+        });
+    }
+}
+exports.StreamedLog = StreamedLog;
+//# sourceMappingURL=log.js.map

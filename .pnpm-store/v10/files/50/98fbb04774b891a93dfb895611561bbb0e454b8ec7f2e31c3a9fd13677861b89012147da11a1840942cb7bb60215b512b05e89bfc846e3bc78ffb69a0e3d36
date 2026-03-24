@@ -1,0 +1,508 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SandboxFilesApi = exports.SandboxWatchDirHandle = void 0;
+const buffer_1 = require("buffer");
+const path_1 = __importDefault(require("path"));
+const web_1 = require("node:stream/web");
+const ws_1 = __importDefault(require("ws"));
+const client_1 = require("../client");
+const ws_2 = require("./ws");
+const normalizeFileType = (value) => {
+    if (!value) {
+        return undefined;
+    }
+    return value === "dir" || value === "directory" ? "dir" : "file";
+};
+const normalizeFileInfo = (entry) => ({
+    path: entry.path,
+    name: entry.name,
+    type: normalizeFileType(entry.type) ?? "file",
+    size: entry.size,
+    mode: entry.mode,
+    permissions: entry.permissions,
+    owner: entry.owner,
+    group: entry.group,
+    modifiedTime: entry.modifiedTime === undefined ? undefined : new Date(entry.modifiedTime),
+    symlinkTarget: entry.symlinkTarget,
+});
+const normalizeWriteInfo = (entry) => ({
+    path: entry.path,
+    name: entry.name,
+    type: normalizeFileType(entry.type),
+});
+const normalizeEventType = (operation) => {
+    const lower = operation.toLowerCase();
+    if (lower.includes("chmod")) {
+        return "chmod";
+    }
+    if (lower.includes("create")) {
+        return "create";
+    }
+    if (lower.includes("remove") || lower.includes("delete")) {
+        return "remove";
+    }
+    if (lower.includes("rename")) {
+        return "rename";
+    }
+    if (lower.includes("write")) {
+        return "write";
+    }
+    return null;
+};
+const relativeWatchName = (root, absolutePath) => {
+    const relative = path_1.default.relative(root, absolutePath);
+    if (!relative || relative === ".") {
+        return path_1.default.basename(absolutePath);
+    }
+    return relative.split(path_1.default.sep).join("/");
+};
+const isReadableStreamLike = (value) => {
+    return (typeof value === "object" &&
+        value !== null &&
+        typeof value.getReader === "function");
+};
+const toReadableStream = (buffer) => {
+    return new web_1.ReadableStream({
+        start(controller) {
+            controller.enqueue(buffer);
+            controller.close();
+        },
+    });
+};
+const bufferFromReadableStream = async (stream) => {
+    const reader = stream.getReader();
+    const chunks = [];
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+        if (value) {
+            chunks.push(buffer_1.Buffer.from(value));
+        }
+    }
+    return buffer_1.Buffer.concat(chunks);
+};
+const encodeWriteData = async (data) => {
+    if (typeof data === "string") {
+        return {
+            data,
+            encoding: "utf8",
+        };
+    }
+    if (buffer_1.Buffer.isBuffer(data)) {
+        return {
+            data: data.toString("base64"),
+            encoding: "base64",
+        };
+    }
+    if (data instanceof Uint8Array) {
+        return {
+            data: buffer_1.Buffer.from(data).toString("base64"),
+            encoding: "base64",
+        };
+    }
+    if (data instanceof ArrayBuffer) {
+        return {
+            data: buffer_1.Buffer.from(data).toString("base64"),
+            encoding: "base64",
+        };
+    }
+    if (data instanceof buffer_1.Blob) {
+        return {
+            data: buffer_1.Buffer.from(await data.arrayBuffer()).toString("base64"),
+            encoding: "base64",
+        };
+    }
+    if (isReadableStreamLike(data)) {
+        return {
+            data: (await bufferFromReadableStream(data)).toString("base64"),
+            encoding: "base64",
+        };
+    }
+    throw new Error("Unsupported write data type");
+};
+class RuntimeFileWatchHandle {
+    constructor(transport, getConnectionInfo, status, runtimeProxyOverride) {
+        this.transport = transport;
+        this.getConnectionInfo = getConnectionInfo;
+        this.status = status;
+        this.runtimeProxyOverride = runtimeProxyOverride;
+    }
+    get id() {
+        return this.status.id;
+    }
+    get path() {
+        return this.status.path;
+    }
+    async stop() {
+        await this.transport.requestJSON(`/sandbox/files/watch/${this.status.id}`, {
+            method: "DELETE",
+        });
+    }
+    async *events(cursor) {
+        const connectionInfo = await this.getConnectionInfo();
+        const target = (0, ws_2.toWebSocketUrl)(connectionInfo.baseUrl, `/sandbox/files/watch/${this.status.id}/ws?sessionId=${encodeURIComponent(connectionInfo.sandboxId)}${cursor !== undefined ? `&cursor=${encodeURIComponent(String(cursor))}` : ""}`, this.runtimeProxyOverride);
+        const headers = {
+            Authorization: `Bearer ${connectionInfo.token}`,
+        };
+        if (target.hostHeader) {
+            headers.Host = target.hostHeader;
+        }
+        const ws = await (0, ws_2.openRuntimeWebSocket)(target, headers);
+        const queue = new ws_2.AsyncEventQueue();
+        ws.on("message", (data) => {
+            try {
+                const parsed = JSON.parse(data.toString());
+                if ("error" in parsed) {
+                    queue.fail(new client_1.HyperbrowserError(parsed.error, {
+                        statusCode: 410,
+                        code: parsed.code,
+                        retryable: false,
+                        service: "runtime",
+                    }));
+                    return;
+                }
+                if (parsed.type === "event") {
+                    queue.push(parsed.event);
+                    return;
+                }
+                queue.close();
+            }
+            catch (error) {
+                queue.fail(error);
+            }
+        });
+        ws.on("close", () => queue.close());
+        ws.on("error", (error) => queue.fail(error));
+        try {
+            for await (const event of queue) {
+                yield event;
+            }
+        }
+        finally {
+            if (ws.readyState !== ws_1.default.CLOSING && ws.readyState !== ws_1.default.CLOSED) {
+                await new Promise((resolve) => {
+                    ws.once("close", () => resolve());
+                    ws.close();
+                });
+            }
+        }
+    }
+}
+class SandboxWatchDirHandle {
+    constructor(watch, onEvent, onExit, timeoutMs) {
+        this.watch = watch;
+        this.onExit = onExit;
+        this.stopRequested = false;
+        this.exitNotified = false;
+        if (timeoutMs !== undefined && timeoutMs > 0) {
+            this.timeout = setTimeout(() => {
+                void this.stop();
+            }, timeoutMs);
+            this.timeout.unref?.();
+        }
+        this.runPromise = this.run(onEvent);
+    }
+    async stop() {
+        if (this.stopRequested) {
+            return;
+        }
+        this.stopRequested = true;
+        if (this.timeout) {
+            clearTimeout(this.timeout);
+            this.timeout = undefined;
+        }
+        await this.watch.stop();
+        await this.runPromise.catch(() => undefined);
+    }
+    async run(onEvent) {
+        let exitError;
+        try {
+            for await (const event of this.watch.events()) {
+                const type = normalizeEventType(event.op);
+                if (!type) {
+                    continue;
+                }
+                await onEvent({
+                    type,
+                    name: relativeWatchName(this.watch.path, event.path),
+                });
+            }
+        }
+        catch (error) {
+            exitError = error;
+        }
+        finally {
+            if (this.timeout) {
+                clearTimeout(this.timeout);
+                this.timeout = undefined;
+            }
+            if (!this.exitNotified) {
+                this.exitNotified = true;
+                await this.onExit?.(exitError);
+            }
+        }
+    }
+}
+exports.SandboxWatchDirHandle = SandboxWatchDirHandle;
+class SandboxFilesApi {
+    constructor(transport, getConnectionInfo, runtimeProxyOverride) {
+        this.transport = transport;
+        this.getConnectionInfo = getConnectionInfo;
+        this.runtimeProxyOverride = runtimeProxyOverride;
+    }
+    async exists(path) {
+        try {
+            await this.getInfo(path);
+            return true;
+        }
+        catch (error) {
+            if (error instanceof client_1.HyperbrowserError && error.statusCode === 404) {
+                return false;
+            }
+            if (error instanceof Error && /not found|no such file|does not exist/i.test(error.message)) {
+                return false;
+            }
+            throw error;
+        }
+    }
+    async getInfo(path) {
+        const response = await this.transport.requestJSON("/sandbox/files/stat", undefined, { path });
+        return normalizeFileInfo(response.file);
+    }
+    async list(path, options = {}) {
+        if (options.depth !== undefined && options.depth < 1) {
+            throw new Error("depth should be at least one");
+        }
+        const response = await this.transport.requestJSON("/sandbox/files", undefined, {
+            path,
+            depth: options.depth ?? 1,
+        });
+        return response.entries.map(normalizeFileInfo);
+    }
+    async read(path, options = {}) {
+        const format = options.format ?? "text";
+        if (format === "text") {
+            const response = await this.readWire(path, options, "utf8");
+            return response.content;
+        }
+        const response = await this.readWire(path, options, "base64");
+        const bytes = buffer_1.Buffer.from(response.content, "base64");
+        if (format === "bytes") {
+            return bytes;
+        }
+        if (format === "blob") {
+            return new buffer_1.Blob([bytes], {
+                type: response.contentType || "application/octet-stream",
+            });
+        }
+        return toReadableStream(bytes);
+    }
+    async readText(path, options = {}) {
+        return this.read(path, { ...options, format: "text" });
+    }
+    async readBytes(path, options = {}) {
+        return this.read(path, { ...options, format: "bytes" });
+    }
+    async write(pathOrFiles, data) {
+        if (typeof pathOrFiles !== "string" && !Array.isArray(pathOrFiles)) {
+            throw new Error("Path or files are required");
+        }
+        if (typeof pathOrFiles === "string" && data === undefined) {
+            throw new Error("Path and data are required");
+        }
+        const files = typeof pathOrFiles === "string"
+            ? [{ path: pathOrFiles, data: data }]
+            : pathOrFiles;
+        if (files.length === 0) {
+            return [];
+        }
+        const encodedFiles = await Promise.all(files.map(async (file) => {
+            if (!file || typeof file.path !== "string" || file.path.length === 0) {
+                throw new Error("Each write entry requires a path");
+            }
+            return {
+                path: file.path,
+                ...(await encodeWriteData(file.data)),
+            };
+        }));
+        const response = await this.transport.requestJSON("/sandbox/files/write", {
+            method: "POST",
+            body: JSON.stringify({ files: encodedFiles }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        const results = response.files.map(normalizeWriteInfo);
+        return typeof pathOrFiles === "string" ? results[0] : results;
+    }
+    async writeText(path, data, options = {}) {
+        return this.writeSingle(path, data, "utf8", options);
+    }
+    async writeBytes(path, data, options = {}) {
+        return this.writeSingle(path, buffer_1.Buffer.from(data).toString("base64"), "base64", options);
+    }
+    async upload(path, data) {
+        const body = typeof data === "string" ? buffer_1.Buffer.from(data, "utf8") : buffer_1.Buffer.from(data);
+        const response = await this.transport.requestJSON("/sandbox/files/upload", {
+            method: "PUT",
+            body,
+        }, { path });
+        return {
+            path: response.path,
+            bytesWritten: response.bytesWritten,
+        };
+    }
+    async download(path) {
+        return this.transport.requestBuffer("/sandbox/files/download", undefined, {
+            path,
+        });
+    }
+    async makeDir(path, options = {}) {
+        const response = await this.transport.requestJSON("/sandbox/files/mkdir", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                parents: options.parents,
+                mode: options.mode,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        return Boolean(response.created);
+    }
+    async rename(oldPath, newPath) {
+        const response = await this.transport.requestJSON("/sandbox/files/move", {
+            method: "POST",
+            body: JSON.stringify({
+                from: oldPath,
+                to: newPath,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        return normalizeFileInfo(response.entry);
+    }
+    async remove(path, options = {}) {
+        await this.transport.requestJSON("/sandbox/files/delete", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                recursive: options.recursive,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async copy(params) {
+        const response = await this.transport.requestJSON("/sandbox/files/copy", {
+            method: "POST",
+            body: JSON.stringify({
+                from: params.source,
+                to: params.destination,
+                recursive: params.recursive,
+                overwrite: params.overwrite,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        return normalizeFileInfo(response.entry);
+    }
+    async chmod(params) {
+        await this.transport.requestJSON("/sandbox/files/chmod", {
+            method: "POST",
+            body: JSON.stringify(params),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async chown(params) {
+        await this.transport.requestJSON("/sandbox/files/chown", {
+            method: "POST",
+            body: JSON.stringify(params),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async watchDir(path, onEvent, options = {}) {
+        const response = await this.transport.requestJSON("/sandbox/files/watch", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                recursive: options.recursive,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        const watch = new RuntimeFileWatchHandle(this.transport, this.getConnectionInfo, response.watch, this.runtimeProxyOverride);
+        return new SandboxWatchDirHandle(watch, onEvent, options.onExit, options.timeoutMs);
+    }
+    async uploadUrl(path, options = {}) {
+        return this.transport.requestJSON("/sandbox/files/presign-upload", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                expiresInSeconds: options.expiresInSeconds,
+                oneTime: options.oneTime,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async downloadUrl(path, options = {}) {
+        return this.transport.requestJSON("/sandbox/files/presign-download", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                expiresInSeconds: options.expiresInSeconds,
+                oneTime: options.oneTime,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async readWire(path, options, encoding) {
+        return this.transport.requestJSON("/sandbox/files/read", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                offset: options.offset,
+                length: options.length,
+                encoding,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+    }
+    async writeSingle(path, data, encoding, options) {
+        const response = await this.transport.requestJSON("/sandbox/files/write", {
+            method: "POST",
+            body: JSON.stringify({
+                path,
+                data,
+                encoding,
+                append: options.append,
+                mode: options.mode,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        return normalizeWriteInfo(response.files[0]);
+    }
+}
+exports.SandboxFilesApi = SandboxFilesApi;

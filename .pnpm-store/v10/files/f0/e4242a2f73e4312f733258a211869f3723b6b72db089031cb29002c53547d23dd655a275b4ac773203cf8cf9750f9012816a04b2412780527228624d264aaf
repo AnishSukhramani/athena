@@ -1,0 +1,79 @@
+{
+  "name": "@hyperbrowser/sdk",
+  "version": "0.87.2",
+  "description": "Node SDK for Hyperbrowser API",
+  "author": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "commonjs",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/**/*.ts",
+    "prepare": "yarn build",
+    "test": "vitest run",
+    "test:e2e": "vitest run tests/sandbox/e2e",
+    "test:watch": "vitest",
+    "format": "prettier --write 'src/**/*.ts'"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "hyperbrowser",
+    "browser",
+    "automation",
+    "webscraping",
+    "webcrawling",
+    "scraping",
+    "crawling",
+    "ai"
+  ],
+  "dependencies": {
+    "form-data": "^4.0.1",
+    "node-fetch": "2.7.0",
+    "ws": "^8.19.0",
+    "zod": "^4.1.12",
+    "zod-to-json-schema": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.1",
+    "@types/node-fetch": "^2.6.4",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "dotenv": "^17.3.1",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/types/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "default": "./dist/tools/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "types": [
+        "./dist/types/index.d.ts"
+      ],
+      "tools": [
+        "./dist/tools/index.d.ts"
+      ]
+    }
+  }
+}

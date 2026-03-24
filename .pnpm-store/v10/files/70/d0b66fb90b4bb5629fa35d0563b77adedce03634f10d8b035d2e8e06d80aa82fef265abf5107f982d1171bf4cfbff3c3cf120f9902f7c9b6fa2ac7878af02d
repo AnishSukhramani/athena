@@ -1,0 +1,5 @@
+import { HyperbrowserClient, HyperbrowserError } from "./client";
+export declare const Hyperbrowser: typeof HyperbrowserClient;
+export type Hyperbrowser = HyperbrowserClient;
+export { HyperbrowserClient, HyperbrowserError };
+export default HyperbrowserClient;

@@ -1,0 +1,130 @@
+import type { WEBHOOK_EVENT_TYPES } from '@apify/consts';
+import type { ApiClientSubResourceOptions } from '../base/api_client';
+import { ResourceClient } from '../base/resource_client';
+import type { WebhookDispatch } from './webhook_dispatch';
+import { WebhookDispatchCollectionClient } from './webhook_dispatch_collection';
+/**
+ * Client for managing a specific webhook.
+ *
+ * Webhooks allow you to receive notifications when specific events occur in your Actors or tasks.
+ * This client provides methods to get, update, delete, and test webhooks, as well as retrieve
+ * webhook dispatches.
+ *
+ * @example
+ * ```javascript
+ * const client = new ApifyClient({ token: 'my-token' });
+ * const webhookClient = client.webhook('my-webhook-id');
+ *
+ * // Get webhook details
+ * const webhook = await webhookClient.get();
+ *
+ * // Update webhook
+ * await webhookClient.update({
+ *   isEnabled: true,
+ *   eventTypes: ['ACTOR.RUN.SUCCEEDED'],
+ *   requestUrl: 'https://example.com/webhook'
+ * });
+ *
+ * // Test webhook
+ * await webhookClient.test();
+ * ```
+ *
+ * @see https://docs.apify.com/platform/integrations/webhooks
+ */
+export declare class WebhookClient extends ResourceClient {
+    /**
+     * @hidden
+     */
+    constructor(options: ApiClientSubResourceOptions);
+    /**
+     * Retrieves the webhook.
+     *
+     * @returns The webhook object, or `undefined` if it does not exist.
+     * @see https://docs.apify.com/api/v2/webhook-get
+     */
+    get(): Promise<Webhook | undefined>;
+    /**
+     * Updates the webhook with the specified fields.
+     *
+     * @param newFields - Fields to update.
+     * @returns The updated webhook object.
+     * @see https://docs.apify.com/api/v2/webhook-put
+     */
+    update(newFields: WebhookUpdateData): Promise<Webhook>;
+    /**
+     * Deletes the webhook.
+     *
+     * @see https://docs.apify.com/api/v2/webhook-delete
+     */
+    delete(): Promise<void>;
+    /**
+     * Tests the webhook by dispatching a test event.
+     *
+     * @returns The webhook dispatch object, or `undefined` if the test fails.
+     * @see https://docs.apify.com/api/v2/webhook-test-post
+     */
+    test(): Promise<WebhookDispatch | undefined>;
+    /**
+     * Returns a client for the dispatches of this webhook.
+     *
+     * @returns A client for the webhook's dispatches.
+     * @see https://docs.apify.com/api/v2/webhook-webhook-dispatches-get
+     */
+    dispatches(): WebhookDispatchCollectionClient;
+}
+/**
+ * Represents a webhook for receiving notifications about Actor events.
+ *
+ * Webhooks send HTTP POST requests to specified URLs when certain events occur
+ * (e.g., Actor run succeeds, fails, or times out).
+ */
+export interface Webhook {
+    id: string;
+    userId: string;
+    createdAt: Date;
+    modifiedAt: Date;
+    isAdHoc: boolean;
+    eventTypes: WebhookEventType[];
+    condition: WebhookCondition;
+    ignoreSslErrors: boolean;
+    doNotRetry: boolean;
+    requestUrl: string;
+    payloadTemplate: string;
+    lastDispatch: string;
+    stats: WebhookStats;
+    shouldInterpolateStrings: boolean;
+    isApifyIntegration?: boolean;
+    headersTemplate?: string;
+    description?: string;
+}
+export interface WebhookIdempotencyKey {
+    idempotencyKey?: string;
+}
+/**
+ * Data for updating a webhook.
+ */
+export type WebhookUpdateData = Partial<Pick<Webhook, 'isAdHoc' | 'eventTypes' | 'condition' | 'ignoreSslErrors' | 'doNotRetry' | 'requestUrl' | 'payloadTemplate' | 'shouldInterpolateStrings' | 'isApifyIntegration' | 'headersTemplate' | 'description'>> & WebhookIdempotencyKey;
+/**
+ * Statistics about webhook usage.
+ */
+export interface WebhookStats {
+    totalDispatches: number;
+}
+/**
+ * Event types that can trigger webhooks.
+ */
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[keyof typeof WEBHOOK_EVENT_TYPES];
+/**
+ * Condition that determines when a webhook should be triggered.
+ */
+export type WebhookCondition = WebhookAnyRunOfActorCondition | WebhookAnyRunOfActorTaskCondition | WebhookCertainRunCondition;
+export interface WebhookAnyRunOfActorCondition {
+    actorId: string;
+}
+export interface WebhookAnyRunOfActorTaskCondition {
+    actorTaskId: string;
+}
+export interface WebhookCertainRunCondition {
+    actorRunId: string;
+}
+//# sourceMappingURL=webhook.d.ts.map

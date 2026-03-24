@@ -1,0 +1,25 @@
+import { RuntimeTransport } from "./base";
+import { SandboxExecParams, SandboxProcessListParams, SandboxProcessListResponse, SandboxProcessResult, SandboxProcessSignal, SandboxProcessStdinParams, SandboxProcessStreamEvent, SandboxProcessSummary, SandboxProcessWaitParams } from "../types/sandbox";
+export declare class SandboxProcessHandle {
+    private readonly transport;
+    private summary;
+    constructor(transport: RuntimeTransport, summary: SandboxProcessSummary);
+    get id(): string;
+    get status(): SandboxProcessSummary["status"];
+    toJSON(): SandboxProcessSummary;
+    refresh(): Promise<SandboxProcessHandle>;
+    wait(params?: SandboxProcessWaitParams): Promise<SandboxProcessResult>;
+    signal(signal: SandboxProcessSignal): Promise<void>;
+    kill(params?: SandboxProcessWaitParams): Promise<SandboxProcessResult>;
+    writeStdin(input: string | Uint8Array | SandboxProcessStdinParams): Promise<void>;
+    stream(fromSeq?: number): AsyncGenerator<SandboxProcessStreamEvent>;
+    result(): Promise<SandboxProcessResult>;
+}
+export declare class SandboxProcessesApi {
+    private readonly transport;
+    constructor(transport: RuntimeTransport);
+    exec(input: SandboxExecParams): Promise<SandboxProcessResult>;
+    start(input: SandboxExecParams): Promise<SandboxProcessHandle>;
+    get(processId: string): Promise<SandboxProcessHandle>;
+    list(params?: SandboxProcessListParams): Promise<SandboxProcessListResponse>;
+}

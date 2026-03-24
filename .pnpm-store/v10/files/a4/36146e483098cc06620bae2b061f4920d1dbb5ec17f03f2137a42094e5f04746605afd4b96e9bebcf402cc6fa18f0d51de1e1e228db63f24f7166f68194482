@@ -1,0 +1,70 @@
+import { STORAGE_OWNERSHIP_FILTER } from '@apify/consts';
+import type { ApiClientSubResourceOptions } from '../base/api_client';
+import { ResourceCollectionClient } from '../base/resource_collection_client';
+import type { PaginatedList, PaginationOptions } from '../utils';
+import type { RequestQueue } from './request_queue';
+/**
+ * Client for managing the collection of Request queues in your account.
+ *
+ * Request queues store URLs to be crawled and their metadata. This client provides methods
+ * to list, create, or get request queues by name.
+ *
+ * @example
+ * ```javascript
+ * const client = new ApifyClient({ token: 'my-token' });
+ * const queuesClient = client.requestQueues();
+ *
+ * // List all request queues
+ * const { items } = await queuesClient.list();
+ *
+ * // Get or create a request queue by name
+ * const queue = await queuesClient.getOrCreate('my-queue');
+ * ```
+ *
+ * @see https://docs.apify.com/platform/storage/request-queue
+ */
+export declare class RequestQueueCollectionClient extends ResourceCollectionClient {
+    /**
+     * @hidden
+     */
+    constructor(options: ApiClientSubResourceOptions);
+    /**
+     * Lists all Request queues.
+     *
+     * Awaiting the return value (as you would with a Promise) will result in a single API call. The amount of fetched
+     * items in a single API call is limited.
+     * ```javascript
+     * const paginatedList = await client.list(options);
+     * ```
+     *
+     * Asynchronous iteration is also supported. This will fetch additional pages if needed until all items are
+     * retrieved.
+     *
+     * ```javascript
+     * for await (const singleItem of client.list(options)) {...}
+     * ```
+     *
+     * @param options - Pagination options.
+     * @returns A paginated iterator of Request queues.
+     * @see https://docs.apify.com/api/v2/request-queues-get
+     */
+    list(options?: RequestQueueCollectionListOptions): Promise<RequestQueueCollectionListResult> & AsyncIterable<RequestQueue>;
+    /**
+     * Gets or creates a Request queue with the specified name.
+     *
+     * @param name - Name of the Request queue. If not provided, a default queue is used.
+     * @returns The Request queue object.
+     * @see https://docs.apify.com/api/v2/request-queues-post
+     */
+    getOrCreate(name?: string): Promise<RequestQueue>;
+}
+export interface RequestQueueCollectionListOptions extends PaginationOptions {
+    unnamed?: boolean;
+    desc?: boolean;
+    /** Filter by ownership: 'ownedByMe' returns only user's own request queues, 'sharedWithMe' returns only shared request queues. */
+    ownership?: STORAGE_OWNERSHIP_FILTER;
+}
+export type RequestQueueCollectionListResult = PaginatedList<RequestQueue> & {
+    unnamed: boolean;
+};
+//# sourceMappingURL=request_queue_collection.d.ts.map

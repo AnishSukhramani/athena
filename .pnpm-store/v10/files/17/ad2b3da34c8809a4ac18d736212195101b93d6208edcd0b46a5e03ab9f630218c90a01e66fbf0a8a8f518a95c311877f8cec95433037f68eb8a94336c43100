@@ -1,0 +1,26 @@
+import { BatchFetchJobResponse, BatchFetchJobStatusResponse, GetBatchFetchJobParams, StartBatchFetchJobParams, StartBatchFetchJobResponse } from "../../types/web/batch-fetch";
+import { BaseService } from "../base";
+export declare class BatchFetchService extends BaseService {
+    /**
+     * Start a new batch fetch job
+     * @param params The parameters for the batch fetch job
+     */
+    start(params: StartBatchFetchJobParams): Promise<StartBatchFetchJobResponse>;
+    /**
+     * Get the status of a batch fetch job
+     * @param id The ID of the batch fetch job to get
+     */
+    getStatus(id: string): Promise<BatchFetchJobStatusResponse>;
+    /**
+     * Get the details of a batch fetch job
+     * @param id The ID of the batch fetch job to get
+     * @param params Optional parameters to filter the batch fetch job
+     */
+    get(id: string, params?: GetBatchFetchJobParams): Promise<BatchFetchJobResponse>;
+    /**
+     * Start a batch fetch job and wait for it to complete
+     * @param params The parameters for the batch fetch job
+     * @param returnAllPages Whether to return all pages in the batch fetch job response
+     */
+    startAndWait(params: StartBatchFetchJobParams, returnAllPages?: boolean): Promise<BatchFetchJobResponse>;
+}

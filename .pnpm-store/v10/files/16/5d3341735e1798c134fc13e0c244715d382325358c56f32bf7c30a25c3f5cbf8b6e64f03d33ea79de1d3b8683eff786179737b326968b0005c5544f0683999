@@ -1,0 +1,18 @@
+import WebSocket from "ws";
+export declare class AsyncEventQueue<T> implements AsyncIterable<T> {
+    private readonly values;
+    private readonly waiters;
+    private done;
+    private error;
+    push(value: T): void;
+    close(): void;
+    fail(error: unknown): void;
+    [Symbol.asyncIterator](): AsyncIterator<T>;
+}
+export interface RuntimeTransportTarget {
+    url: string;
+    hostHeader?: string;
+}
+export declare const resolveRuntimeTransportTarget: (baseUrl: string, path: string, runtimeProxyOverride?: string) => RuntimeTransportTarget;
+export declare const toWebSocketUrl: (baseUrl: string, path: string, runtimeProxyOverride?: string) => RuntimeTransportTarget;
+export declare const openRuntimeWebSocket: (target: RuntimeTransportTarget, headers: Record<string, string>) => Promise<WebSocket>;

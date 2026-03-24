@@ -1,0 +1,270 @@
+import type { ACT_JOB_TERMINAL_STATUSES } from '@apify/consts';
+import type { ApiClientSubResourceOptions } from '../base/api_client';
+import { ResourceClient } from '../base/resource_client';
+import type { ActorDefinition } from './actor';
+import { LogClient } from './log';
+/**
+ * Client for managing a specific Actor build.
+ *
+ * Builds are created when an Actor is built from source code. This client provides methods
+ * to get build details, wait for the build to finish, abort it, and access its logs.
+ *
+ * @example
+ * ```javascript
+ * const client = new ApifyClient({ token: 'my-token' });
+ * const buildClient = client.build('my-build-id');
+ *
+ * // Get build details
+ * const build = await buildClient.get();
+ *
+ * // Wait for the build to finish
+ * const finishedBuild = await buildClient.waitForFinish();
+ *
+ * // Access build logs
+ * const log = await buildClient.log().get();
+ * ```
+ *
+ * @see https://docs.apify.com/platform/actors/running/runs-and-builds#builds
+ */
+export declare class BuildClient extends ResourceClient {
+    /**
+     * @hidden
+     */
+    constructor(options: ApiClientSubResourceOptions);
+    /**
+     * Gets the Actor build object from the Apify API.
+     *
+     * @param options - Get options
+     * @param options.waitForFinish - Maximum time to wait (in seconds, max 60s) for the build to finish on the API side before returning. Default is 0 (returns immediately).
+     * @returns The Build object, or `undefined` if it does not exist
+     * @see https://docs.apify.com/api/v2/actor-build-get
+     *
+     * @example
+     * ```javascript
+     * // Get build status immediately
+     * const build = await client.build('build-id').get();
+     * console.log(`Status: ${build.status}`);
+     *
+     * // Wait up to 60 seconds for build to finish
+     * const build = await client.build('build-id').get({ waitForFinish: 60 });
+     * ```
+     */
+    get(options?: BuildClientGetOptions): Promise<Build | undefined>;
+    /**
+     * Aborts the Actor build.
+     *
+     * Stops the build process immediately. The build will have an `ABORTED` status.
+     *
+     * @returns The updated Build object with `ABORTED` status
+     * @see https://docs.apify.com/api/v2/actor-build-abort-post
+     *
+     * @example
+     * ```javascript
+     * await client.build('build-id').abort();
+     * ```
+     */
+    abort(): Promise<Build>;
+    /**
+     * Deletes the Actor build.
+     *
+     * @see https://docs.apify.com/api/v2/actor-build-delete
+     */
+    delete(): Promise<void>;
+    /**
+     * Retrieves the OpenAPI definition for the Actor build.
+     *
+     * @returns The OpenAPI definition object.
+     * @see https://docs.apify.com/api/v2/actor-build-openapi-json-get
+     */
+    getOpenApiDefinition(): Promise<OpenApiDefinition>;
+    /**
+     * Waits for the Actor build to finish and returns the finished Build object.
+     *
+     * The promise resolves when the build reaches a terminal state (`SUCCEEDED`, `FAILED`, `ABORTED`, or `TIMED-OUT`).
+     * If `waitSecs` is provided and the timeout is reached, the promise resolves with the unfinished
+     * Build object (status will be `RUNNING` or `READY`). The promise is NOT rejected based on build status.
+     *
+     * Unlike the `waitForFinish` parameter in {@link get}, this method can wait indefinitely
+     * by polling the build status. It uses the `waitForFinish` parameter internally (max 60s per call)
+     * and continuously polls until the build finishes or the timeout is reached.
+     *
+     * This is useful when you need to immediately start a run after a build finishes.
+     *
+     * @param options - Wait options
+     * @param options.waitSecs - Maximum time to wait for the build to finish, in seconds. If omitted, waits indefinitely.
+     * @returns The Build object (finished or still building if timeout was reached)
+     *
+     * @example
+     * ```javascript
+     * // Wait indefinitely for build to finish
+     * const build = await client.build('build-id').waitForFinish();
+     * console.log(`Build finished with status: ${build.status}`);
+     *
+     * // Start a run immediately after build succeeds
+     * const build = await client.build('build-id').waitForFinish();
+     * if (build.status === 'SUCCEEDED') {
+     *   const run = await client.actor('my-actor').start();
+     * }
+     * ```
+     */
+    waitForFinish(options?: BuildClientWaitForFinishOptions): Promise<Build>;
+    /**
+     * Returns a client for accessing the log of this Actor build.
+     *
+     * @returns A client for accessing the build's log
+     * @see https://docs.apify.com/api/v2/actor-build-log-get
+     *
+     * @example
+     * ```javascript
+     * // Get build log
+     * const log = await client.build('build-id').log().get();
+     * console.log(log);
+     * ```
+     */
+    log(): LogClient;
+}
+/**
+ * Options for getting a Build.
+ */
+export interface BuildClientGetOptions {
+    waitForFinish?: number;
+}
+/**
+ * Options for waiting for a Build to finish.
+ */
+export interface BuildClientWaitForFinishOptions {
+    /**
+     * Maximum time to wait for the build to finish, in seconds.
+     * If the limit is reached, the returned promise is resolved to a build object that will have
+     * status `READY` or `RUNNING`. If `waitSecs` omitted, the function waits indefinitely.
+     */
+    waitSecs?: number;
+}
+/**
+ * Metadata about how a Build was initiated.
+ */
+export interface BuildMeta {
+    origin: string;
+    clientIp: string;
+    userAgent: string;
+}
+/**
+ * Represents an Actor build.
+ *
+ * Builds compile Actor source code and prepare it for execution. Each build has a unique ID
+ * and can be tagged (e.g., 'latest', 'beta') for easy reference.
+ */
+export interface Build {
+    id: string;
+    actId: string;
+    userId: string;
+    startedAt: Date;
+    finishedAt?: Date;
+    status: (typeof ACT_JOB_TERMINAL_STATUSES)[number];
+    meta: BuildMeta;
+    stats?: BuildStats;
+    options?: BuildOptions;
+    /**
+     * @deprecated This property is deprecated in favor of `actorDefinition.input`.
+     */
+    inputSchema?: string;
+    /**
+     * @deprecated This property is deprecated in favor of `actorDefinition.readme`.
+     */
+    readme?: string;
+    buildNumber: string;
+    usage?: BuildUsage;
+    usageTotalUsd?: number;
+    usageUsd?: BuildUsage;
+    actorDefinition?: ActorDefinition;
+}
+/**
+ * Resource usage for an Actor build.
+ */
+export interface BuildUsage {
+    ACTOR_COMPUTE_UNITS?: number;
+}
+/**
+ * Runtime statistics for an Actor build.
+ */
+export interface BuildStats {
+    durationMillis: number;
+    runTimeSecs: number;
+    computeUnits: number;
+}
+/**
+ * Configuration options used for an Actor build.
+ */
+export interface BuildOptions {
+    useCache?: boolean;
+    betaPackages?: boolean;
+    memoryMbytes?: number;
+    diskMbytes?: number;
+}
+/**
+ * OpenAPI specification for an Actor.
+ *
+ * Defines the Actor's API interface in OpenAPI 3.0 format, useful for integration
+ * with tools like ChatGPT plugins and other API consumers.
+ */
+export interface OpenApiDefinition {
+    openapi: string;
+    info: {
+        title: string;
+        description?: string;
+        version?: string;
+        'x-build-id': string;
+    };
+    servers: {
+        url: string;
+    }[];
+    paths: {
+        [key: string]: {
+            post: OpenApiOperation;
+        };
+    };
+    components: {
+        schemas: {
+            [key: string]: object;
+        };
+    };
+}
+interface OpenApiOperation {
+    operationId: string;
+    'x-openai-isConsequential': boolean;
+    summary: string;
+    tags: string[];
+    requestBody: {
+        required: boolean;
+        content: {
+            'application/json': {
+                schema: {
+                    $ref: string;
+                };
+            };
+        };
+    };
+    parameters: {
+        name: string;
+        in: string;
+        required: boolean;
+        schema: {
+            type: string;
+        };
+        description: string;
+    }[];
+    responses: {
+        '200': {
+            description: string;
+            content?: {
+                'application/json': {
+                    schema: {
+                        $ref: string;
+                    };
+                };
+            };
+        };
+    };
+}
+export {};
+//# sourceMappingURL=build.d.ts.map

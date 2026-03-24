@@ -1,0 +1,28 @@
+import { RequestInit } from "node-fetch";
+export interface RuntimeConnection {
+    sandboxId: string;
+    baseUrl: string;
+    token: string;
+    directSessionHeader?: boolean;
+}
+export interface RuntimeSSEEvent {
+    event: string;
+    data: unknown;
+    id?: string;
+}
+type RuntimeParams = Record<string, string | number | boolean | undefined>;
+export declare class RuntimeTransport {
+    private readonly resolveConnection;
+    private readonly timeout;
+    private readonly runtimeProxyOverride?;
+    constructor(resolveConnection: (forceRefresh?: boolean) => Promise<RuntimeConnection>, timeout?: number, runtimeProxyOverride?: string | undefined);
+    requestJSON<T>(path: string, init?: RequestInit, params?: RuntimeParams): Promise<T>;
+    requestBuffer(path: string, init?: RequestInit, params?: RuntimeParams): Promise<Buffer>;
+    streamSSE(path: string, params?: RuntimeParams): AsyncGenerator<RuntimeSSEEvent>;
+    private fetchWithAuth;
+    private fetchForConnection;
+    private assertResponse;
+    private buildHeaders;
+    private normalizeBaseUrl;
+}
+export {};

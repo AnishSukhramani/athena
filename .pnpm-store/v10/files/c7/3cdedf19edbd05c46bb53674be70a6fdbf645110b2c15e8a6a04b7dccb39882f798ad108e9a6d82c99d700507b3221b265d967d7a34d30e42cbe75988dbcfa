@@ -1,0 +1,26 @@
+import { BaseService } from "../base";
+import { GetWebCrawlJobParams, StartWebCrawlJobParams, StartWebCrawlJobResponse, WebCrawlJobResponse, WebCrawlJobStatusResponse } from "../../types/web/crawl";
+export declare class WebCrawlService extends BaseService {
+    /**
+     * Start a new web crawl job
+     * @param params The parameters for the web crawl job
+     */
+    start(params: StartWebCrawlJobParams): Promise<StartWebCrawlJobResponse>;
+    /**
+     * Get the status of a web crawl job
+     * @param id The ID of the web crawl job to get
+     */
+    getStatus(id: string): Promise<WebCrawlJobStatusResponse>;
+    /**
+     * Get the details of a web crawl job
+     * @param id The ID of the web crawl job to get
+     * @param params Optional parameters to filter the web crawl job
+     */
+    get(id: string, params?: GetWebCrawlJobParams): Promise<WebCrawlJobResponse>;
+    /**
+     * Start a web crawl job and wait for it to complete
+     * @param params The parameters for the web crawl job
+     * @param returnAllPages Whether to return all pages in the web crawl job response
+     */
+    startAndWait(params: StartWebCrawlJobParams, returnAllPages?: boolean): Promise<WebCrawlJobResponse>;
+}

@@ -1,0 +1,217 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SandboxTerminalApi = exports.SandboxTerminalHandle = exports.SandboxTerminalConnection = void 0;
+const ws_1 = __importDefault(require("ws"));
+const ws_2 = require("./ws");
+const DEFAULT_TERMINAL_KILL_WAIT_MS = 5000;
+const normalizeTerminalOutputChunk = (output) => {
+    const raw = Buffer.from(output.data, "base64");
+    return {
+        seq: output.seq,
+        data: raw.toString("utf8"),
+        raw,
+        timestamp: output.timestamp,
+    };
+};
+const cloneTerminalStatus = (status) => ({
+    ...status,
+    output: status.output?.map((chunk) => ({
+        ...chunk,
+        raw: Buffer.from(chunk.raw),
+    })),
+});
+const normalizeTerminalStatus = (pty) => ({
+    id: pty.id,
+    command: pty.command,
+    args: pty.args,
+    cwd: pty.cwd,
+    pid: pty.pid,
+    running: pty.running,
+    exitCode: pty.exitCode,
+    error: pty.error,
+    timedOut: pty.timedOut,
+    rows: pty.rows,
+    cols: pty.cols,
+    startedAt: pty.startedAt,
+    finishedAt: pty.finishedAt,
+    output: pty.output?.map(normalizeTerminalOutputChunk),
+});
+class SandboxTerminalConnection {
+    constructor(ws) {
+        this.ws = ws;
+        this.eventsQueue = new ws_2.AsyncEventQueue();
+        ws.on("message", (data) => {
+            try {
+                const parsed = JSON.parse(data.toString());
+                if (parsed.type === "output") {
+                    const output = normalizeTerminalOutputChunk(parsed);
+                    this.eventsQueue.push({
+                        type: "output",
+                        ...output,
+                    });
+                    return;
+                }
+                this.eventsQueue.push({
+                    type: "exit",
+                    status: normalizeTerminalStatus(parsed.status),
+                });
+            }
+            catch (error) {
+                this.eventsQueue.fail(error);
+            }
+        });
+        ws.on("close", () => {
+            this.eventsQueue.close();
+        });
+        ws.on("error", (error) => {
+            this.eventsQueue.fail(error);
+        });
+    }
+    events() {
+        return this.eventsQueue;
+    }
+    async write(data) {
+        const payload = typeof data === "string"
+            ? {
+                type: "input",
+                data,
+            }
+            : {
+                type: "input",
+                data: Buffer.from(data).toString("base64"),
+                encoding: "base64",
+            };
+        await this.send(payload);
+    }
+    async resize(rows, cols) {
+        await this.send({
+            type: "resize",
+            rows,
+            cols,
+        });
+    }
+    async close() {
+        if (this.ws.readyState === ws_1.default.CLOSING || this.ws.readyState === ws_1.default.CLOSED) {
+            return;
+        }
+        await new Promise((resolve) => {
+            this.ws.once("close", () => resolve());
+            this.ws.close();
+        });
+    }
+    async send(payload) {
+        await new Promise((resolve, reject) => {
+            this.ws.send(JSON.stringify(payload), (error) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve();
+            });
+        });
+    }
+}
+exports.SandboxTerminalConnection = SandboxTerminalConnection;
+class SandboxTerminalHandle {
+    constructor(transport, getConnectionInfo, status, runtimeProxyOverride) {
+        this.transport = transport;
+        this.getConnectionInfo = getConnectionInfo;
+        this.status = status;
+        this.runtimeProxyOverride = runtimeProxyOverride;
+    }
+    get id() {
+        return this.status.id;
+    }
+    get current() {
+        return cloneTerminalStatus(this.status);
+    }
+    toJSON() {
+        return cloneTerminalStatus(this.status);
+    }
+    async refresh(includeOutput = false) {
+        const response = await this.transport.requestJSON(`/sandbox/pty/${this.id}`, undefined, includeOutput ? { includeOutput: true } : undefined);
+        this.status = normalizeTerminalStatus(response.pty);
+        return this;
+    }
+    async wait(params = {}) {
+        const response = await this.transport.requestJSON(`/sandbox/pty/${this.id}/wait`, {
+            method: "POST",
+            body: JSON.stringify({
+                timeoutMs: params.timeoutMs,
+                includeOutput: params.includeOutput,
+            }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        this.status = normalizeTerminalStatus(response.pty);
+        return this.current;
+    }
+    async signal(signal) {
+        const response = await this.transport.requestJSON(`/sandbox/pty/${this.id}/kill`, {
+            method: "POST",
+            body: JSON.stringify({ signal }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        this.status = normalizeTerminalStatus(response.pty);
+        return this.current;
+    }
+    async kill(input) {
+        const params = typeof input === "string" ? { signal: input } : (input ?? {});
+        await this.signal(params.signal);
+        return this.wait({
+            timeoutMs: params.timeoutMs ?? DEFAULT_TERMINAL_KILL_WAIT_MS,
+        });
+    }
+    async resize(rows, cols) {
+        const response = await this.transport.requestJSON(`/sandbox/pty/${this.id}/resize`, {
+            method: "POST",
+            body: JSON.stringify({ rows, cols }),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        this.status = normalizeTerminalStatus(response.pty);
+        return this.current;
+    }
+    async attach() {
+        const connectionInfo = await this.getConnectionInfo();
+        const target = (0, ws_2.toWebSocketUrl)(connectionInfo.baseUrl, `/sandbox/pty/${this.id}/ws?sessionId=${encodeURIComponent(connectionInfo.sandboxId)}`, this.runtimeProxyOverride);
+        const headers = {
+            Authorization: `Bearer ${connectionInfo.token}`,
+        };
+        if (target.hostHeader) {
+            headers.Host = target.hostHeader;
+        }
+        const ws = await (0, ws_2.openRuntimeWebSocket)(target, headers);
+        return new SandboxTerminalConnection(ws);
+    }
+}
+exports.SandboxTerminalHandle = SandboxTerminalHandle;
+class SandboxTerminalApi {
+    constructor(transport, getConnectionInfo, runtimeProxyOverride) {
+        this.transport = transport;
+        this.getConnectionInfo = getConnectionInfo;
+        this.runtimeProxyOverride = runtimeProxyOverride;
+    }
+    async create(params) {
+        const response = await this.transport.requestJSON("/sandbox/pty", {
+            method: "POST",
+            body: JSON.stringify(params),
+            headers: {
+                "content-type": "application/json",
+            },
+        });
+        return new SandboxTerminalHandle(this.transport, this.getConnectionInfo, normalizeTerminalStatus(response.pty), this.runtimeProxyOverride);
+    }
+    async get(id, includeOutput = false) {
+        const response = await this.transport.requestJSON(`/sandbox/pty/${id}`, undefined, includeOutput ? { includeOutput: true } : undefined);
+        return new SandboxTerminalHandle(this.transport, this.getConnectionInfo, normalizeTerminalStatus(response.pty), this.runtimeProxyOverride);
+    }
+}
+exports.SandboxTerminalApi = SandboxTerminalApi;

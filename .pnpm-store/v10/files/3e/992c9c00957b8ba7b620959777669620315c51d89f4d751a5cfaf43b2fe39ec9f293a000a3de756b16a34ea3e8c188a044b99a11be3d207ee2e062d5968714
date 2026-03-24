@@ -1,0 +1,45 @@
+import WebSocket from "ws";
+import { RuntimeTransport } from "./base";
+import { SandboxTerminalCreateParams, SandboxTerminalEvent, SandboxTerminalKillParams, SandboxTerminalStatus, SandboxTerminalWaitParams } from "../types/sandbox";
+interface RuntimeConnectionInfo {
+    sandboxId: string;
+    baseUrl: string;
+    token: string;
+}
+export declare class SandboxTerminalConnection {
+    private readonly ws;
+    private readonly eventsQueue;
+    constructor(ws: WebSocket);
+    events(): AsyncIterable<SandboxTerminalEvent>;
+    write(data: string | Uint8Array): Promise<void>;
+    resize(rows: number, cols: number): Promise<void>;
+    close(): Promise<void>;
+    private send;
+}
+export declare class SandboxTerminalHandle {
+    private readonly transport;
+    private readonly getConnectionInfo;
+    private status;
+    private readonly runtimeProxyOverride?;
+    constructor(transport: RuntimeTransport, getConnectionInfo: () => Promise<RuntimeConnectionInfo>, status: SandboxTerminalStatus, runtimeProxyOverride?: string | undefined);
+    get id(): string;
+    get current(): SandboxTerminalStatus;
+    toJSON(): SandboxTerminalStatus;
+    refresh(includeOutput?: boolean): Promise<SandboxTerminalHandle>;
+    wait(params?: SandboxTerminalWaitParams): Promise<SandboxTerminalStatus>;
+    signal(signal?: string): Promise<SandboxTerminalStatus>;
+    kill(): Promise<SandboxTerminalStatus>;
+    kill(signal: string): Promise<SandboxTerminalStatus>;
+    kill(params: SandboxTerminalKillParams): Promise<SandboxTerminalStatus>;
+    resize(rows: number, cols: number): Promise<SandboxTerminalStatus>;
+    attach(): Promise<SandboxTerminalConnection>;
+}
+export declare class SandboxTerminalApi {
+    private readonly transport;
+    private readonly getConnectionInfo;
+    private readonly runtimeProxyOverride?;
+    constructor(transport: RuntimeTransport, getConnectionInfo: () => Promise<RuntimeConnectionInfo>, runtimeProxyOverride?: string | undefined);
+    create(params: SandboxTerminalCreateParams): Promise<SandboxTerminalHandle>;
+    get(id: string, includeOutput?: boolean): Promise<SandboxTerminalHandle>;
+}
+export {};

@@ -1,0 +1,92 @@
+import { Blob, Buffer } from "buffer";
+import { ReadableStream } from "node:stream/web";
+import { RuntimeTransport } from "./base";
+import { SandboxFileChmodParams, SandboxFileChownParams, SandboxFileCopyParams, SandboxFileInfo, SandboxFileListOptions, SandboxFileMakeDirOptions, SandboxFileReadOptions, SandboxFileSystemEvent, SandboxFileTransferResult, SandboxFileWriteData, SandboxFileWriteEntry, SandboxFileWriteInfo, SandboxFileBytesWriteOptions, SandboxFileTextWriteOptions, SandboxPresignFileParams, SandboxPresignedUrl, SandboxWatchDirOptions } from "../types/sandbox";
+interface RawFileWatchEvent {
+    seq: number;
+    path: string;
+    op: string;
+    timestamp: number;
+}
+interface RawFileWatchStatus {
+    id: string;
+    path: string;
+    recursive: boolean;
+    active: boolean;
+    error?: string;
+    createdAt: number;
+    stoppedAt?: number;
+    oldestSeq?: number;
+    lastSeq?: number;
+    eventCount?: number;
+}
+interface RuntimeConnectionInfo {
+    sandboxId: string;
+    baseUrl: string;
+    token: string;
+}
+declare class RuntimeFileWatchHandle {
+    private readonly transport;
+    private readonly getConnectionInfo;
+    private readonly status;
+    private readonly runtimeProxyOverride?;
+    constructor(transport: RuntimeTransport, getConnectionInfo: () => Promise<RuntimeConnectionInfo>, status: RawFileWatchStatus, runtimeProxyOverride?: string | undefined);
+    get id(): string;
+    get path(): string;
+    stop(): Promise<void>;
+    events(cursor?: number): AsyncGenerator<RawFileWatchEvent>;
+}
+export declare class SandboxWatchDirHandle {
+    private readonly watch;
+    private readonly onExit?;
+    private readonly runPromise;
+    private timeout?;
+    private stopRequested;
+    private exitNotified;
+    constructor(watch: RuntimeFileWatchHandle, onEvent: (event: SandboxFileSystemEvent) => void | Promise<void>, onExit?: ((error?: Error) => void | Promise<void>) | undefined, timeoutMs?: number);
+    stop(): Promise<void>;
+    private run;
+}
+export declare class SandboxFilesApi {
+    private readonly transport;
+    private readonly getConnectionInfo;
+    private readonly runtimeProxyOverride?;
+    constructor(transport: RuntimeTransport, getConnectionInfo: () => Promise<RuntimeConnectionInfo>, runtimeProxyOverride?: string | undefined);
+    exists(path: string): Promise<boolean>;
+    getInfo(path: string): Promise<SandboxFileInfo>;
+    list(path: string, options?: SandboxFileListOptions): Promise<SandboxFileInfo[]>;
+    read(path: string, options?: SandboxFileReadOptions & {
+        format?: "text";
+    }): Promise<string>;
+    read(path: string, options: SandboxFileReadOptions & {
+        format: "bytes";
+    }): Promise<Buffer>;
+    read(path: string, options: SandboxFileReadOptions & {
+        format: "blob";
+    }): Promise<Blob>;
+    read(path: string, options: SandboxFileReadOptions & {
+        format: "stream";
+    }): Promise<ReadableStream<Uint8Array>>;
+    readText(path: string, options?: Omit<SandboxFileReadOptions, "format">): Promise<string>;
+    readBytes(path: string, options?: Omit<SandboxFileReadOptions, "format">): Promise<Buffer>;
+    write(path: string, data: SandboxFileWriteData): Promise<SandboxFileWriteInfo>;
+    write(files: SandboxFileWriteEntry[]): Promise<SandboxFileWriteInfo[]>;
+    writeText(path: string, data: string, options?: SandboxFileTextWriteOptions): Promise<SandboxFileWriteInfo>;
+    writeBytes(path: string, data: Uint8Array, options?: SandboxFileBytesWriteOptions): Promise<SandboxFileWriteInfo>;
+    upload(path: string, data: Buffer | Uint8Array | string): Promise<SandboxFileTransferResult>;
+    download(path: string): Promise<Buffer>;
+    makeDir(path: string, options?: SandboxFileMakeDirOptions): Promise<boolean>;
+    rename(oldPath: string, newPath: string): Promise<SandboxFileInfo>;
+    remove(path: string, options?: {
+        recursive?: boolean;
+    }): Promise<void>;
+    copy(params: SandboxFileCopyParams): Promise<SandboxFileInfo>;
+    chmod(params: SandboxFileChmodParams): Promise<void>;
+    chown(params: SandboxFileChownParams): Promise<void>;
+    watchDir(path: string, onEvent: (event: SandboxFileSystemEvent) => void | Promise<void>, options?: SandboxWatchDirOptions): Promise<SandboxWatchDirHandle>;
+    uploadUrl(path: string, options?: Omit<SandboxPresignFileParams, "path">): Promise<SandboxPresignedUrl>;
+    downloadUrl(path: string, options?: Omit<SandboxPresignFileParams, "path">): Promise<SandboxPresignedUrl>;
+    private readWire;
+    private writeSingle;
+}
+export {};
