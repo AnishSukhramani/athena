@@ -1,12 +1,20 @@
 {
   "name": "jobportalscout",
   "version": "0.1.0",
+  "private": true,
   "description": "Lead generation agent for dental/medical front desk hiring opportunities",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "scout": "node src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "worker": "node workers/index.js",
+    "brain:dev": "dotenv -e .env -- pnpm --filter brain-web exec next dev -p 3000",
+    "brain:build": "pnpm --filter brain-web build",
+    "brain:start": "dotenv -e .env -- pnpm --filter brain-web exec next start -p 3000"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
   },
   "keywords": [
     "lead-generation",
@@ -17,10 +25,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.750.0",
     "@hyperbrowser/agent": "^1.1.2",
     "@hyperbrowser/sdk": "^0.87.0",
+    "@jobportalscout/db": "workspace:*",
+    "cheerio": "^1.0.0",
     "dotenv": "^16.4.5",
     "googleapis": "^144.0.0",
+    "openai": "^4.85.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
     "zod": "^4.1.8"
