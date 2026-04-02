@@ -6,3 +6,7 @@ apps/brain-web/.next/
 *.log
 service-account.json
 .DS_Store
+
+# local datasets (too large for GitHub)
+endpoint_pfile_20050523-20260308.csv
+npidata_pfile_20050523-20260308.csv

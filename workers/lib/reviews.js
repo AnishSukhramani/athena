@@ -45,9 +45,14 @@ async function fetchPlaceReviews(placeId, apiKey) {
 export async function runReviewFrictionForQueries(queries, log) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) {
-    log.warn('GOOGLE_MAPS_API_KEY not set — skipping review fragment');
+    log.warn(
+      { queryCount: queries.length, sampleQueries: queries.slice(0, 3) },
+      'GOOGLE_MAPS_API_KEY not set — skipping review fragment',
+    );
     return 0;
   }
+
+  log.info({ queryCount: queries.length }, 'Review friction: running Places lookups');
 
   let created = 0;
   for (const q of queries) {
@@ -107,5 +112,14 @@ export async function runReviewFrictionFragment(log) {
   });
 
   const queries = [...new Set([...fromEnv, ...dbQueries])];
+  log.info(
+    {
+      queryCount: queries.length,
+      fromEnv: fromEnv.length,
+      fromDb: dbQueries.length,
+      reviewDbPracticeLimit: limit,
+    },
+    'Review fragment: query list built',
+  );
   return runReviewFrictionForQueries(queries, log);
 }

@@ -11,9 +11,17 @@ function startOfUtcDay(d = new Date()) {
 
 function scoreForSignalType(type) { return SIGNAL_WEIGHTS[type] ?? 0; }
 
+const STRONG_SIGNAL_TYPES = new Set([
+  'job_frontdesk',
+  'new_practice',
+  'phone_friction',
+  'chronic_turnover',
+  'legacy_tech_stack',
+  'competitor_xray_engagement',
+]);
+
 function hasStrongSignal(signals) {
-  const types = new Set(signals.map((s) => s.type));
-  return types.has('job_frontdesk') || types.has('new_practice') || types.has('phone_friction');
+  return signals.some((s) => STRONG_SIGNAL_TYPES.has(s.type));
 }
 
 function computeScore(signals) {
@@ -54,6 +62,25 @@ function evidenceRowsFromSignals(signals) {
       rows.push({ type: 'snippet', content: `New/changed practice: NPI ${meta.npi_id || ''} ${meta.location || ''}`.trim(), source_url: null });
     } else if (s.type === 'low_automation') {
       rows.push({ type: 'snippet', content: `Automation: score ${meta.automation_score ?? 'n/a'}; missing: ${(meta.missing_features || []).join(', ')}`, source_url: meta.website_url || null });
+    } else if (s.type === 'chronic_turnover') {
+      rows.push({
+        type: 'snippet',
+        content: `Chronic turnover: ${meta.posting_count ?? '?'} front-desk postings in ${meta.window_months ?? 6} months (deduped by job URL).`,
+        source_url: null,
+      });
+    } else if (s.type === 'legacy_tech_stack') {
+      const m = Array.isArray(meta.matches) ? meta.matches : [];
+      rows.push({
+        type: 'snippet',
+        content: `Legacy tech / PMS signals: ${m.length ? m.join('; ') : 'detected'}. URLs: ${(meta.urls_fetched || []).join(', ')}`.slice(0, 2000),
+        source_url: meta.urls_fetched?.[0] || null,
+      });
+    } else if (s.type === 'competitor_xray_engagement') {
+      rows.push({
+        type: 'snippet',
+        content: `Competitor LinkedIn engagement: ${meta.full_name || 'Lead'} — ${meta.headline || ''}. Post: ${meta.source_post_url || ''}`.trim().slice(0, 2000),
+        source_url: meta.linkedin_profile_url || meta.source_post_url || null,
+      });
     }
   }
   return rows.filter((r) => r.content?.length > 0);
@@ -89,7 +116,18 @@ export async function runScoringEngine(log, { sinceHours = 168 } = {}) {
     .gte('timestamp', since);
 
   const uniqueIds = [...new Set((practiceIds || []).map((r) => r.practice_id))];
-  if (uniqueIds.length === 0) { log.info('No recent signals'); return { created: 0, updated: 0, capped: 0 }; }
+  if (uniqueIds.length === 0) {
+    log.info(
+      { sinceHours, sinceIso: since, rawSignalRows: (practiceIds || []).length },
+      'No recent signals in window — nothing to score',
+    );
+    return { created: 0, updated: 0, capped: 0 };
+  }
+
+  log.info(
+    { practiceCount: uniqueIds.length, sinceHours, sinceIso: since },
+    'Scoring: practices with signals in window',
+  );
 
   const dayStart = startOfUtcDay().toISOString();
   const { count: todayCount } = await supabase

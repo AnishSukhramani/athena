@@ -9,11 +9,92 @@ import { classifyJobFrontDesk } from './classify.js';
 import { resolveDomainFromJob } from './practice-helpers.js';
 import { ensurePractice } from './practice-db.js';
 import { uploadEvidenceBlob } from './evidence-storage.js';
-import { USER_AGENT } from './constants.js';
+import {
+  USER_AGENT,
+  CHRONIC_TURNOVER_WINDOW_MONTHS,
+  CHRONIC_TURNOVER_MIN_POSTINGS,
+  CHRONIC_TURNOVER_SIGNAL_COOLDOWN_HOURS,
+} from './constants.js';
 
-async function fetchText(url, { timeoutMs = 25000 } = {}) {
+function normalizeJobTitleNorm(t) {
+  return String(t || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
+}
+
+/**
+ * Deduped job URL history + optional chronic_turnover signal (Athena v1.2).
+ */
+async function recordJobHistoryAndMaybeChurn(log, practice, record, source) {
+  const jobUrl = record.sourceUrl || '';
+  if (!jobUrl) return;
+
+  const job_title_norm = normalizeJobTitleNorm(record.jobTitle);
+  const row = {
+    practice_id: practice.id,
+    job_title: (record.jobTitle || '').slice(0, 2000),
+    job_title_norm,
+    source,
+    job_url: jobUrl.slice(0, 8000),
+    date_posted: new Date().toISOString(),
+  };
+
+  const { error: insErr } = await supabase.from('job_post_history_athena').insert(row);
+  if (insErr) {
+    if (insErr.code === '23505') return;
+    log.warn({ err: insErr.message, practiceId: practice.id }, 'job_post_history insert failed');
+    return;
+  }
+
+  const since = new Date();
+  since.setMonth(since.getMonth() - CHRONIC_TURNOVER_WINDOW_MONTHS);
+
+  const { count, error: cErr } = await supabase
+    .from('job_post_history_athena')
+    .select('*', { count: 'exact', head: true })
+    .eq('practice_id', practice.id)
+    .gte('date_posted', since.toISOString());
+
+  if (cErr) {
+    log.warn({ err: cErr.message }, 'job_post_history count failed');
+    return;
+  }
+
+  if ((count || 0) < CHRONIC_TURNOVER_MIN_POSTINGS) return;
+
+  const cooldownIso = new Date(
+    Date.now() - CHRONIC_TURNOVER_SIGNAL_COOLDOWN_HOURS * 3600 * 1000,
+  ).toISOString();
+  const { data: recentChurn } = await supabase
+    .from('signals_athena')
+    .select('id')
+    .eq('practice_id', practice.id)
+    .eq('type', 'chronic_turnover')
+    .gte('timestamp', cooldownIso)
+    .limit(1)
+    .maybeSingle();
+
+  if (recentChurn) return;
+
+  await supabase.from('signals_athena').insert({
+    type: 'chronic_turnover',
+    practice_id: practice.id,
+    strength: 'HIGH',
+    metadata: {
+      posting_count: count,
+      window_months: CHRONIC_TURNOVER_WINDOW_MONTHS,
+      job_title_norm,
+      source,
+    },
+  });
+}
+
+async function fetchHtml(url, { timeoutMs = 25000 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const t0 = Date.now();
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
@@ -22,22 +103,40 @@ async function fetchText(url, { timeoutMs = 25000 } = {}) {
         Accept: 'text/html,application/xhtml+xml',
       },
     });
+    const text = await res.text();
+    const ms = Date.now() - t0;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
+    return {
+      text,
+      status: res.status,
+      ms,
+      byteLength: Buffer.byteLength(text, 'utf8'),
+    };
   } finally {
     clearTimeout(t);
   }
+}
+
+async function fetchText(url, opts) {
+  const { text } = await fetchHtml(url, opts);
+  return text;
+}
+
+/** DentalPost list pages use /job-post/{id}/slug/ (current). Older pages used /job/... */
+function isDentalPostJobListingHref(href) {
+  if (!href || href.startsWith('#')) return false;
+  return href.includes('/job-post/') || href.includes('/job/');
 }
 
 export function extractDentalPostJobLinks(html, baseOrigin = 'https://www.dentalpost.net') {
   const $ = cheerio.load(html);
   const seen = new Set();
   const out = [];
-  $('a[href*="/job/"]').each((_, el) => {
+  $('a[href*="/job-post/"], a[href*="/job/"]').each((_, el) => {
     let href = $(el).attr('href');
     if (!href) return;
     if (href.startsWith('/')) href = baseOrigin + href;
-    if (!href.includes('/job/')) return;
+    if (!isDentalPostJobListingHref(href)) return;
     if (seen.has(href)) return;
     seen.add(href);
     const title = $(el).text().trim() || $(el).attr('title') || '';
@@ -116,17 +215,55 @@ export async function runDentalPostJobs(log) {
     ? process.env.DENTALPOST_URLS.split(',').map((s) => s.trim())
     : DENTALPOST_URLS;
 
+  log.info(
+    { listUrlCount: urls.length, source: process.env.DENTALPOST_URLS ? 'env:DENTALPOST_URLS' : 'src/config' },
+    'DentalPost job run starting',
+  );
+
   let created = 0;
   for (const listUrl of urls) {
     let html;
+    let meta = null;
     try {
-      html = await fetchText(listUrl);
+      const fetched = await fetchHtml(listUrl);
+      html = fetched.text;
+      meta = { status: fetched.status, ms: fetched.ms, byteLength: fetched.byteLength };
     } catch (err) {
       log.warn({ listUrl, err: err.message }, 'DentalPost list fetch failed');
       continue;
     }
     const links = extractDentalPostJobLinks(html).slice(0, 40);
-    log.info({ listUrl, links: links.length }, 'DentalPost links parsed');
+    const rawJobPostPathMatches = (html.match(/\/job-post\//g) || []).length;
+    const rawLegacyJobPathMatches = (html.match(/\/job\//g) || []).length;
+    const titleSnippet =
+      html.match(/<title[^>]*>([^<]{0,160})/i)?.[1]?.replace(/\s+/g, ' ')?.trim() ?? null;
+
+    log.info(
+      {
+        listUrl,
+        anchorLinksParsed: links.length,
+        ...meta,
+        rawJobPostPathOccurrencesInHtml: rawJobPostPathMatches,
+        rawLegacyJobPathOccurrencesInHtml: rawLegacyJobPathMatches,
+        titleSnippet,
+      },
+      'DentalPost list page fetched',
+    );
+
+    if (links.length === 0 && (rawJobPostPathMatches > 0 || rawLegacyJobPathMatches > 0)) {
+      log.warn(
+        {
+          listUrl,
+          rawJobPostPathOccurrencesInHtml: rawJobPostPathMatches,
+          rawLegacyJobPathOccurrencesInHtml: rawLegacyJobPathMatches,
+        },
+        'DentalPost: job listing paths in HTML but no usable anchor links — page structure may have changed',
+      );
+    }
+
+    let skippedNotFrontDesk = 0;
+    let detailErrors = 0;
+    const createdBeforeList = created;
 
     for (const { url: jobUrl } of links) {
       try {
@@ -144,11 +281,20 @@ export async function runDentalPostJobs(log) {
           log,
         });
 
-        if (!classification.frontDesk) continue;
+        if (!classification.frontDesk) {
+          skippedNotFrontDesk += 1;
+          log.debug(
+            { jobUrl, jobTitle: record.jobTitle?.slice?.(0, 120) },
+            'DentalPost job skipped (not front desk)',
+          );
+          continue;
+        }
 
         const name = record.companyName || record.jobTitle || 'Unknown practice';
         const domain = resolveDomainFromJob(jobUrl, name);
         const practice = await ensurePractice({ name, domain: domain || null });
+
+        await recordJobHistoryAndMaybeChurn(log, practice, record, 'dentalpost');
 
         let storageKey = null;
         if (process.env.S3_BUCKET) {
@@ -171,9 +317,21 @@ export async function runDentalPostJobs(log) {
         });
         created += 1;
       } catch (err) {
+        detailErrors += 1;
         log.warn({ jobUrl, err: err.message }, 'DentalPost job detail failed');
       }
     }
+
+    log.info(
+      {
+        listUrl,
+        jobLinksOnPage: links.length,
+        signalsInsertedThisList: created - createdBeforeList,
+        skippedNotFrontDesk,
+        detailErrors,
+      },
+      'DentalPost list URL done',
+    );
   }
   log.info({ signalsCreated: created }, 'DentalPost job signals done');
   return created;
@@ -184,11 +342,17 @@ export async function runCareerJsonLdJobs(log) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  log.info({ seedCount: seeds.length }, 'Career JSON-LD run starting');
   let created = 0;
+  let skippedNotFrontDesk = 0;
   for (const pageUrl of seeds) {
     try {
-      const html = await fetchText(pageUrl);
+      const { text: html, status, ms, byteLength } = await fetchHtml(pageUrl);
       const ldJobs = extractJobPostingJsonLd(html);
+      log.info(
+        { pageUrl, httpStatus: status, responseMs: ms, htmlBytes: byteLength, jobPostingNodes: ldJobs.length },
+        'Career page fetched',
+      );
       for (const job of ldJobs) {
         const record = jobPostingToRecord(job, pageUrl);
         const classification = await classifyJobFrontDesk({
@@ -197,11 +361,20 @@ export async function runCareerJsonLdJobs(log) {
           companyName: record.companyName,
           log,
         });
-        if (!classification.frontDesk) continue;
+        if (!classification.frontDesk) {
+          skippedNotFrontDesk += 1;
+          log.debug(
+            { pageUrl, jobTitle: record.jobTitle?.slice?.(0, 120) },
+            'Career JSON-LD job skipped (not front desk)',
+          );
+          continue;
+        }
 
         const name = record.companyName || 'Career page job';
         const domain = resolveDomainFromJob(record.sourceUrl, name);
         const practice = await ensurePractice({ name, domain: domain || null });
+
+        await recordJobHistoryAndMaybeChurn(log, practice, record, 'json_ld');
 
         await supabase.from('signals_athena').insert({
           type: 'job_frontdesk',
@@ -221,12 +394,13 @@ export async function runCareerJsonLdJobs(log) {
       log.warn({ pageUrl, err: err.message }, 'Career JSON-LD fetch failed');
     }
   }
-  log.info({ signalsCreated: created }, 'Career JSON-LD job signals done');
+  log.info({ signalsCreated: created, skippedNotFrontDesk }, 'Career JSON-LD job signals done');
   return created;
 }
 
 export async function runJobSignalFragment(log) {
   const a = await runDentalPostJobs(log);
   const b = await runCareerJsonLdJobs(log);
+  log.info({ dentalPostSignals: a, careerJsonLdSignals: b, total: a + b }, 'Job signal fragment summary');
   return a + b;
 }

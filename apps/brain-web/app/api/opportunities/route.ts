@@ -2,7 +2,15 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db';
 import type { SignalType } from '@/types/prisma';
 
-const VALID_SIGNALS: SignalType[] = ['job_frontdesk', 'phone_friction', 'new_practice', 'low_automation'];
+const VALID_SIGNALS: SignalType[] = [
+  'job_frontdesk',
+  'chronic_turnover',
+  'phone_friction',
+  'new_practice',
+  'low_automation',
+  'legacy_tech_stack',
+  'competitor_xray_engagement',
+];
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

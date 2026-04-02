@@ -1,0 +1,43 @@
+---
+description: Sova brain-web UI shell, shadcn, and layout conventions — do not deviate
+globs: apps/brain-web/**/*
+alwaysApply: false
+---
+
+# Sova (`brain-web`) UI — locked conventions
+
+## Stack (do not replace)
+
+- **Layout & chrome**: shadcn **Sidebar** via [`AppShell`](apps/brain-web/components/app-shell.tsx) only. Primary nav = **Opportunities** (`/`, `/opportunity/*`) and **Output** (`/output/*`). Do not add a second top-level nav pattern or duplicate headers outside this shell.
+- **Output**: When route is under `/output`, show the **secondary channel nav** (Facebook, LinkedIn, Email, Blog/Newsletter) as today — desktop aside + mobile horizontal strip. Channel stubs live under [`components/output/`](apps/brain-web/components/output/); routes [`/output/[channel]`](apps/brain-web/app/(app)/output/[channel]/page.tsx).
+- **Components**: Use primitives from [`@/components/ui/*`](apps/brain-web/components/ui/) (shadcn/Base UI). Add new UI via `pnpm dlx shadcn@latest add …` from `apps/brain-web` so [`components.json`](apps/brain-web/components.json) (style **base-nova**, **lucide**, CSS variables) stays the source of truth.
+- **Icons**: **lucide-react** only for app chrome and nav.
+- **Styling**: **Tailwind v3** + semantic tokens (`bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-sidebar`, `text-sidebar-foreground`, `primary`, etc.). Prefer these over raw hex in new code. **Dark**: root [`layout.tsx`](apps/brain-web/app/layout.tsx) keeps `className="dark"` on `<html>` — do not remove.
+- **Global CSS**: [`globals.css`](apps/brain-web/app/globals.css) holds legacy helpers (`.card`, `.meta`, `.badge`, `.evidence`, `.actions`) for the opportunities feed/detail; keep using them there for visual consistency unless intentionally redesigning the whole feed.
+
+## Root layout (do not strip)
+
+- Wrap the app in [`TooltipProvider`](apps/brain-web/components/ui/tooltip.tsx) (see [`app/layout.tsx`](apps/brain-web/app/layout.tsx)).
+- Route group [`app/(app)/`](apps/brain-web/app/(app)/) wraps **all** main UI pages in `AppShell`; API routes stay under `app/api/`.
+
+## Sidebar rail
+
+- Do **not** restore a **full-height** `SidebarRail` (`inset-y-0` spanning the column). The rail must stay a **short, centered** edge handle as in [`sidebar.tsx`](apps/brain-web/components/ui/sidebar.tsx).
+
+## Anti-patterns
+
+- ❌ Raw `<header>`/`<main>` page chrome duplicating Sova branding outside `AppShell`.
+- ❌ MUI, Chakra, ad-hoc component libraries, or inline `style={{}}` for layout/spacing in new features.
+- ❌ Replacing `@tailwind` + `tailwind.config.ts` theme tokens with one-off colors for the same role (background, border, sidebar).
+- ❌ New “Output” channels without a matching stub under `components/output/` and entry in [`lib/output-channels.ts`](apps/brain-web/lib/output-channels.ts).
+
+## File map (where things go)
+
+| Area | Location |
+|------|----------|
+| shadcn primitives | `apps/brain-web/components/ui/` |
+| Opportunities UI | `apps/brain-web/components/opportunities/` |
+| Output channel stubs | `apps/brain-web/components/output/` |
+| App shell (sidebars) | `apps/brain-web/components/app-shell.tsx` |
+
+When unsure, match patterns in existing `OpportunitiesFeed`, `AppShell`, and `components/ui/*`.

@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { Button } from '@/components/ui/button';
+
 export function ValidateButtons({ opportunityId }: { opportunityId: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -27,15 +29,15 @@ export function ValidateButtons({ opportunityId }: { opportunityId: string }) {
 
   return (
     <div className="actions">
-      <button type="button" disabled={pending} onClick={() => submit('valid')}>
+      <Button type="button" disabled={pending} onClick={() => submit('valid')}>
         Mark valid
-      </button>
-      <button type="button" className="secondary" disabled={pending} onClick={() => submit('not_relevant')}>
+      </Button>
+      <Button type="button" variant="outline" disabled={pending} onClick={() => submit('not_relevant')}>
         Not relevant
-      </button>
-      <button type="button" className="secondary" disabled={pending} onClick={() => submit('duplicate')}>
+      </Button>
+      <Button type="button" variant="outline" disabled={pending} onClick={() => submit('duplicate')}>
         Duplicate
-      </button>
+      </Button>
     </div>
   );
 }

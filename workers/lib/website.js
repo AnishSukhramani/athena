@@ -44,6 +44,11 @@ export async function runWebsiteFragment(log) {
     .order('updated_at', { ascending: false })
     .limit(take);
 
+  log.info(
+    { practicesToScan: (practices || []).length, scanLimit: take },
+    'Website fragment: scanning homepages',
+  );
+
   let created = 0;
   for (const p of (practices || [])) {
     if (!p.domain) continue;

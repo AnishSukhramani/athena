@@ -1,0 +1,19 @@
+{
+  "competitors": [
+    {
+      "key": "weave",
+      "name": "Weave",
+      "adLibraryUrl": "https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=US&view_all_page_id=REPLACE_WITH_META_PAGE_ID"
+    },
+    {
+      "key": "nexhealth",
+      "name": "NexHealth",
+      "adLibraryUrl": "https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=US&view_all_page_id=REPLACE_WITH_META_PAGE_ID"
+    },
+    {
+      "key": "ruby_receptionists",
+      "name": "Ruby Receptionists",
+      "adLibraryUrl": "https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=US&view_all_page_id=REPLACE_WITH_META_PAGE_ID"
+    }
+  ]
+}
