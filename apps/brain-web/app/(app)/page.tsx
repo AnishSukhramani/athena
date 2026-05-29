@@ -2,7 +2,7 @@ import { OpportunitiesFeed } from '@/components/opportunities/OpportunitiesFeed'
 
 export const dynamic = 'force-dynamic';
 
-type SearchParams = { minScore?: string; state?: string; signal?: string };
+type SearchParams = { minScore?: string; state?: string; signal?: string; classification?: string };
 
 export default async function HomePage({
   searchParams,

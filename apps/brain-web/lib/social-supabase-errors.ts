@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 type SbError = { message: string; code?: string };
 
 const MIGRATION_HINT =
-  'Run supabase/migration_social_publisher_v1.sql in the Supabase SQL editor. Server routes need SUPABASE_SERVICE_ROLE_KEY.';
+  'Run supabase/migrations/20260101000001_social_publisher_v1.sql in the Supabase SQL editor. Server routes need SUPABASE_SERVICE_ROLE_KEY.';
 
 const BUCKET_HINT =
   'Create a Storage bucket named social-media (public read if Facebook/LinkedIn must fetch media by URL).';

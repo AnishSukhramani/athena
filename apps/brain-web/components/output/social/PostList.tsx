@@ -73,7 +73,11 @@ export function PostList({ platform, onEdit }: Props) {
       <div className="card border-destructive/30 bg-destructive/5">
         <p className="mb-0 font-medium text-destructive">{error}</p>
         <p className="meta mt-2 mb-0">
-          Run <code className="rounded bg-muted px-1 py-0.5 text-foreground">migration_social_publisher_v1.sql</code> in
+          Run{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+            supabase/migrations/20260101000001_social_publisher_v1.sql
+          </code>{' '}
+          in
           Supabase and create the <code className="rounded bg-muted px-1 py-0.5 text-foreground">social-media</code>{' '}
           storage bucket if you have not yet.
         </p>

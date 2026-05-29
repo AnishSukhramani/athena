@@ -12,11 +12,13 @@ Find all three in: **Supabase dashboard → Project Settings → API**.
 
 ## Create tables
 
-Open the **SQL Editor** in your Supabase dashboard and run [`supabase/schema.sql`](../supabase/schema.sql). This creates all tables, enums, indexes, and triggers.
+Open the **SQL Editor** in your Supabase dashboard and run [`supabase/brain_athena_baseline_full.sql`](../supabase/brain_athena_baseline_full.sql) for a **new** project (full Opportunity Brain DDL in one file). Layout and migration order are documented in [`supabase/README.md`](../supabase/README.md).
+
+If the brain tables already exist and you only need **opportunity classification** columns (recommendations + accepted labels), run [`supabase/migrations/20260101000002_opportunity_classification_athena.sql`](../supabase/migrations/20260101000002_opportunity_classification_athena.sql).
 
 ## Same project as another app
 
-All brain tables have distinct names (`practices`, `signals`, `opportunities`, `evidence`, `opportunity_validations`, `scoring_runs`, `npi_snapshots`). They won't collide with typical app tables. If you need stronger isolation, move them to a dedicated PostgreSQL schema later.
+All brain tables use the `_athena` suffix (e.g. `practices_athena`, `signals_athena`, `opportunities_athena`) so they are unlikely to collide with other app tables in the same database. If you need stronger isolation, move them to a dedicated PostgreSQL schema later.
 
 ## No Prisma
 

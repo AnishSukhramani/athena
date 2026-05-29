@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/db';
+import { ClassificationPanel } from '@/components/opportunities/ClassificationPanel';
 import { ValidateButtons } from './validate-buttons';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +84,21 @@ export default async function OpportunityPage({
           </p>
         ))}
       </section>
+
+      <ClassificationPanel
+        initial={{
+          id: opportunity.id,
+          recommended_actionable: opportunity.recommended_actionable ?? null,
+          recommended_content: opportunity.recommended_content ?? null,
+          recommendation_reason: opportunity.recommendation_reason ?? null,
+          recommendation_confidence: opportunity.recommendation_confidence ?? null,
+          classifier_version: opportunity.classifier_version ?? null,
+          recommended_at: opportunity.recommended_at ?? null,
+          accepted_actionable: opportunity.accepted_actionable ?? null,
+          accepted_content: opportunity.accepted_content ?? null,
+          accepted_at: opportunity.accepted_at ?? null,
+        }}
+      />
     </div>
   );
 }

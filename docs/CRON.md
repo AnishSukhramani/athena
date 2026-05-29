@@ -2,7 +2,7 @@
 
 Run workers with `pnpm run worker -- <fragment>` from the repo root (requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`).
 
-**Existing Supabase projects:** apply [`supabase/migration_athena_v1_2.sql`](../supabase/migration_athena_v1_2.sql) once in the SQL Editor (new enum labels + `job_post_history_athena`, `competitor_ads_athena`, `xray_leads_athena`). Greenfield installs can rely on [`supabase/schema.sql`](../supabase/schema.sql) only.
+**Existing Supabase projects:** apply [`supabase/migrations/20260101000000_athena_v1_2_incremental.sql`](../supabase/migrations/20260101000000_athena_v1_2_incremental.sql) once in the SQL Editor (new enum labels + `job_post_history_athena`, `competitor_ads_athena`, `xray_leads_athena`). Greenfield installs that ran [`supabase/brain_athena_baseline_full.sql`](../supabase/brain_athena_baseline_full.sql) already include those objects.
 
 | Fragment | Suggested schedule | Command |
 |----------|-------------------|---------|

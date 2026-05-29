@@ -1,15 +1,14 @@
--- Social publisher (Facebook / LinkedIn) — isolated from _athena tables.
--- Run in Supabase SQL Editor after reviewing storage steps below.
-
--- ---------------------------------------------------------------------------
--- Storage (Supabase Dashboard → Storage)
--- 1. Create bucket: social-media
--- 2. For Facebook/LinkedIn to fetch image/video URLs, either:
---    - Set bucket to **public**, OR
---    - Keep private and use a worker/CDN that exposes signed URLs at publish time.
--- 3. Optional policy (public read): allow public read on social-media for objects.
--- Service role bypasses RLS; brain-web uses service role for uploads.
--- ---------------------------------------------------------------------------
+-- =============================================================================
+-- Migration 01 — Social publisher (Facebook / LinkedIn)
+-- =============================================================================
+--
+-- Isolated from `_athena` tables. Run after brain core exists.
+--
+-- Storage (manual, Supabase Dashboard):
+--   1. Create bucket: social-media
+--   2. For public image/video URLs: bucket public, or signed URLs at publish time.
+--   Service role bypasses RLS; brain-web uses service role for uploads.
+-- =============================================================================
 
 create type social_platform as enum ('facebook', 'linkedin');
 

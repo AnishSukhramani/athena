@@ -1,12 +1,17 @@
-import Link from 'next/link';
 import { supabase } from '@/lib/db';
 import type { SignalType } from '@/types/prisma';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { OpportunitiesFeedClient, type FeedOpp } from '@/components/opportunities/OpportunitiesFeedClient';
 
-type SearchParams = { minScore?: string; state?: string; signal?: string };
+type SearchParams = {
+  minScore?: string;
+  state?: string;
+  signal?: string;
+  classification?: string;
+};
 
 const VALID_SIGNALS: SignalType[] = [
   'job_frontdesk',
@@ -17,6 +22,38 @@ const VALID_SIGNALS: SignalType[] = [
   'legacy_tech_stack',
   'competitor_xray_engagement',
 ];
+
+const CLASS_FILTERS = [
+  '',
+  'needs_review',
+  'no_rec',
+  'accepted_actionable',
+  'accepted_content',
+  'accepted_both',
+  'accepted_neither',
+] as const;
+
+function matchesClassification(o: FeedOpp, filter: string | undefined) {
+  if (!filter) return true;
+  const hasAcc = o.accepted_at != null;
+  const hasRec = o.recommended_at != null;
+  switch (filter) {
+    case 'needs_review':
+      return hasRec && !hasAcc;
+    case 'no_rec':
+      return !hasRec;
+    case 'accepted_actionable':
+      return hasAcc && Boolean(o.accepted_actionable);
+    case 'accepted_content':
+      return hasAcc && Boolean(o.accepted_content);
+    case 'accepted_both':
+      return hasAcc && Boolean(o.accepted_actionable) && Boolean(o.accepted_content);
+    case 'accepted_neither':
+      return hasAcc && !o.accepted_actionable && !o.accepted_content;
+    default:
+      return true;
+  }
+}
 
 const selectClassName = cn(
   'h-8 w-full min-w-[10rem] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm shadow-none transition-colors',
@@ -30,16 +67,23 @@ export async function OpportunitiesFeed({ searchParams }: { searchParams: Search
   const signalRaw = searchParams.signal?.trim();
   const signalType =
     signalRaw && VALID_SIGNALS.includes(signalRaw as SignalType) ? signalRaw : undefined;
+  const classRaw = searchParams.classification?.trim();
+  const classification =
+    classRaw && CLASS_FILTERS.includes(classRaw as (typeof CLASS_FILTERS)[number])
+      ? classRaw
+      : undefined;
 
   const { data: opportunities } = await supabase
     .from('opportunities_athena')
-    .select('*, practice:practices_athena(*), evidence:evidence_athena(*)')
+    .select(
+      'id, practice_id, score, summary, practice:practices_athena(*), evidence:evidence_athena(*), recommended_actionable, recommended_content, recommended_at, accepted_actionable, accepted_content, accepted_at'
+    )
     .gte('score', minScore)
     .order('score', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(150);
 
-  let filtered = opportunities || [];
+  let filtered: FeedOpp[] = (opportunities || []) as FeedOpp[];
 
   if (signalType) {
     const { data: matchIds } = await supabase
@@ -47,14 +91,18 @@ export async function OpportunitiesFeed({ searchParams }: { searchParams: Search
       .select('practice_id')
       .eq('type', signalType);
     const pids = new Set((matchIds || []).map((r: { practice_id: string }) => r.practice_id));
-    filtered = filtered.filter((o: { practice_id: string }) => pids.has(o.practice_id));
+    filtered = filtered.filter((o) => pids.has(o.practice_id));
   }
 
   if (state) {
-    filtered = filtered.filter((o: { practice: { locations: unknown } }) => {
+    filtered = filtered.filter((o) => {
       const blob = JSON.stringify(o.practice?.locations ?? []);
       return blob.toUpperCase().includes(state.toUpperCase());
     });
+  }
+
+  if (classification) {
+    filtered = filtered.filter((o) => matchesClassification(o, classification));
   }
 
   return (
@@ -99,50 +147,29 @@ export async function OpportunitiesFeed({ searchParams }: { searchParams: Search
             <option value="competitor_xray_engagement">competitor_xray_engagement</option>
           </select>
         </div>
+        <div className="grid min-w-[14rem] gap-2">
+          <Label htmlFor="classification">Classification</Label>
+          <select
+            id="classification"
+            name="classification"
+            defaultValue={classification || ''}
+            className={selectClassName}
+          >
+            <option value="">Any</option>
+            <option value="needs_review">Has rec, not accepted</option>
+            <option value="no_rec">No recommendation yet</option>
+            <option value="accepted_actionable">Accepted · actionable</option>
+            <option value="accepted_content">Accepted · content</option>
+            <option value="accepted_both">Accepted · both</option>
+            <option value="accepted_neither">Accepted · neither</option>
+          </select>
+        </div>
         <Button type="submit" size="default" className="h-8">
           Apply
         </Button>
       </form>
 
-      <section>
-        {filtered.length === 0 ? (
-          <p className="meta">
-            No opportunities match. Run workers: <code>pnpm run worker -- all</code>
-          </p>
-        ) : (
-          filtered.map((o: any) => (
-            <article key={o.id} className="card">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h2>{o.practice?.name}</h2>
-                  <div className="meta">
-                    Score <strong>{o.score}</strong>
-                    {o.practice?.domain ? ` · ${o.practice.domain}` : ''}
-                  </div>
-                </div>
-                <Link href={`/opportunity/${o.id}`} className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-                  Details →
-                </Link>
-              </div>
-              {o.summary && <p className="mb-0">{o.summary}</p>}
-              <div className="mt-2">
-                {(o.evidence || []).slice(0, 2).map((e: any) => (
-                  <div key={e.id} className="evidence">
-                    {e.content?.slice(0, 280)}
-                    {e.source_url && (
-                      <div>
-                        <a href={e.source_url} target="_blank" rel="noreferrer">
-                          Source
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))
-        )}
-      </section>
+      <OpportunitiesFeedClient opportunities={filtered} />
     </div>
   );
 }
