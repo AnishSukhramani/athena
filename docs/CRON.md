@@ -13,9 +13,12 @@ Run workers with `pnpm run worker -- <fragment>` from the repo root (requires `S
 | Tech stack | Nightly (after website) | `pnpm run worker -- tech_stack` |
 | Ad library | Weekly | `pnpm run worker -- ad_library` |
 | Competitor x-ray | Weekly | `pnpm run worker -- competitor_xray` |
+| Voice AI Scout | Weekly | `pnpm run worker -- voice_ai_scout` |
 | Scoring | After fragments or hourly | `pnpm run worker -- score` |
 
-`pnpm run worker -- all` runs jobs → reviews → nppes → website → **tech_stack** → score. It does **not** run `ad_library` or `competitor_xray` (slow, Hyperbrowser-heavy, schedule separately).
+`pnpm run worker -- all` runs jobs → reviews → nppes → website → **tech_stack** → score. It does **not** run `ad_library`, `competitor_xray`, or `voice_ai_scout` (slow, Hyperbrowser-heavy, schedule separately).
+
+**voice_ai_scout** requires `HYPERBROWSER_API_KEY`. With `OPENAI_API_KEY` set, discovery queries are expanded automatically by LLM (recommended). Competitor Facebook page IDs are auto-resolved each run — no manual lookup needed. To pin a page ID manually, add it to `manual_page_id_overrides` in `workers/config/voice-ai-competitors.json`.
 
 Example crontab (UTC):
 
@@ -28,4 +31,5 @@ Example crontab (UTC):
 5 * * * * cd /path/to/jobportalscout && pnpm run worker -- score
 30 3 * * 1 cd /path/to/jobportalscout && pnpm run worker -- ad_library
 45 3 * * 1 cd /path/to/jobportalscout && pnpm run worker -- competitor_xray
+0 2 * * 1 cd /path/to/jobportalscout && pnpm run worker -- voice_ai_scout
 ```

@@ -10,7 +10,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Briefcase, Send } from 'lucide-react';
+import { Briefcase, MessageSquare, Send } from 'lucide-react';
 
 import { OUTPUT_CHANNELS } from '@/lib/output-channels';
 import {
@@ -38,6 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const onOpportunities = opportunitiesActive(pathname);
   const onOutput = pathname.startsWith('/output');
+  const onChat = pathname.startsWith('/chat');
 
   return (
     <SidebarProvider>
@@ -85,6 +86,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <Link href="/output" aria-current={onOutput ? 'page' : undefined}>
                         <Send />
                         <span>Output</span>
+                      </Link>
+                    }
+                  />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={onChat}
+                    tooltip="Chat"
+                    render={
+                      <Link href="/chat" aria-current={onChat ? 'page' : undefined}>
+                        <MessageSquare />
+                        <span>Chat</span>
                       </Link>
                     }
                   />

@@ -11,6 +11,7 @@ import { runWebsiteFragment } from './lib/website.js';
 import { runTechStackFragment } from './lib/tech-stack.js';
 import { runAdLibraryFragment } from './lib/ad-library.js';
 import { runCompetitorXrayFragment } from './lib/competitor-xray.js';
+import { runVoiceAiScoutFragment } from './lib/voice-ai-scout.js';
 import { runScoringEngine } from './lib/scoring.js';
 import { logWorkerServiceStatus } from './lib/env-status.js';
 
@@ -37,8 +38,9 @@ Fragments:
   tech_stack       Legacy PMS / portal detection (fetch + regex + optional BuiltWith)
   ad_library       Meta Ad Library via Hyperbrowser extract → competitor_ads_athena
   competitor_xray  LinkedIn engagement extract → xray_leads_athena (+ signals when matched)
+  voice_ai_scout   Voice AI healthcare competitor tracking (Meta Ad Library + Creator Marketplace)
   score            Opportunity scoring + evidence + summaries
-  all              jobs → reviews → nppes → website → tech_stack → score (no ad_library/xray)
+  all              jobs → reviews → nppes → website → tech_stack → score (no ad_library/xray/voice_ai_scout)
 `);
     process.exit(0);
   }
@@ -74,6 +76,9 @@ Fragments:
     case 'competitor_xray':
       await runCompetitorXrayFragment(log);
       break;
+    case 'voice_ai_scout':
+      await runVoiceAiScoutFragment(log);
+      break;
     case 'score':
       await runScoringEngine(log);
       break;
@@ -94,7 +99,7 @@ Fragments:
     default:
       log.error(
         { fragment },
-        'Unknown fragment — use: jobs | reviews | nppes | website | tech_stack | ad_library | competitor_xray | score | all | help',
+        'Unknown fragment — use: jobs | reviews | nppes | website | tech_stack | ad_library | competitor_xray | voice_ai_scout | score | all | help',
       );
       process.exit(1);
   }

@@ -87,6 +87,12 @@ export async function logWorkerServiceStatus(log, { fragment }) {
     adLibrary: {
       config: 'competitor-pages.json or COMPETITOR_FB_PAGES_JSON',
     },
+    voiceAiScout: {
+      config: 'voice-ai-competitors.json',
+      discoveryEnabled: (process.env.VOICE_AI_SCOUT_DISCOVERY || 'true').toLowerCase() !== 'false',
+      discoveryMode: present(process.env.OPENAI_API_KEY) ? 'openai_expanded' : 'config_keywords_only',
+      maxAdsPerCompetitor: Number(process.env.VOICE_AI_SCOUT_MAX_ADS || 50),
+    },
     competitorXray: {
       posts: (process.env.XRAY_LINKEDIN_POST_URLS || '')
         .split(',')
@@ -161,6 +167,17 @@ function readinessHints(fragment, snap, careerSeedCount, reviewEnvQueryCount) {
       }
     : { skipped: true };
 
+  const voice_ai_scout = run('voice_ai_scout')
+    ? {
+        willRun: snap.hyperbrowser.apiKey,
+        discoveryEnabled: snap.voiceAiScout?.discoveryEnabled ?? true,
+        discoveryMode: snap.voiceAiScout?.discoveryMode ?? 'config_keywords_only',
+        note: snap.hyperbrowser.apiKey
+          ? 'page IDs auto-resolved; set manual_page_id_overrides in voice-ai-competitors.json to override'
+          : 'set_HYPERBROWSER_API_KEY',
+      }
+    : { skipped: true };
+
   const competitor_xray = run('competitor_xray')
     ? {
         willRun: snap.hyperbrowser.apiKey,
@@ -178,7 +195,7 @@ function readinessHints(fragment, snap, careerSeedCount, reviewEnvQueryCount) {
       }
     : { skipped: true };
 
-  return { jobs, reviews, nppes, website, tech_stack, ad_library, competitor_xray, score };
+  return { jobs, reviews, nppes, website, tech_stack, ad_library, voice_ai_scout, competitor_xray, score };
 }
 
 async function verifySupabaseConnection(log) {

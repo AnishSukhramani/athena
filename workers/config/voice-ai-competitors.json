@@ -1,0 +1,204 @@
+{
+  "_comment": "Seed list of known voice AI healthcare competitors. fb_page_id is auto-resolved by the fragment — you don't need to fill it in. If you find a page ID manually, add it to manual_page_id_overrides below and it will take priority.",
+
+  "_comment_manual_overrides": "Add manually found Facebook page IDs here. Key = competitor key (slug), value = numeric FB page ID string. These always win over auto-discovery and config fb_page_id values. Example: \"hyro\": \"123456789012345\"",
+  "manual_page_id_overrides": {
+  },
+  "competitors": [
+    {
+      "key": "hyro",
+      "name": "Hyro",
+      "website": "https://www.hyro.ai",
+      "description": "AI-powered voice and chat for healthcare systems, hospitals, and medical practices",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "hospital_and_health_systems" }
+    },
+    {
+      "key": "synthflow",
+      "name": "Synthflow AI",
+      "website": "https://synthflow.ai",
+      "description": "No-code AI voice agent platform; widely adopted in medical and dental front desk automation",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "general_with_heavy_healthcare_use" }
+    },
+    {
+      "key": "bland_ai",
+      "name": "Bland AI",
+      "website": "https://www.bland.ai",
+      "description": "AI phone calling platform for automated patient intake, scheduling, and reminders",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "phone_ai_general_healthcare" }
+    },
+    {
+      "key": "retell_ai",
+      "name": "Retell AI",
+      "website": "https://www.retellai.com",
+      "description": "Voice AI platform for building and deploying AI phone agents; used in healthcare scheduling",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "voice_ai_platform" }
+    },
+    {
+      "key": "vapi",
+      "name": "Vapi",
+      "website": "https://vapi.ai",
+      "description": "Developer-first voice AI platform; used by healthcare startups for AI receptionist builds",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "developer_platform_healthcare_builds" }
+    },
+    {
+      "key": "my_ai_front_desk",
+      "name": "My AI Front Desk",
+      "website": "https://www.myaifrontdesk.com",
+      "description": "AI receptionist specifically targeting small medical and dental practices for after-hours call handling",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "small_medical_dental_practices" }
+    },
+    {
+      "key": "outbound_ai",
+      "name": "Outbound AI",
+      "website": "https://outbound.ai",
+      "description": "AI phone agent for healthcare — handles scheduling, billing inquiries, and patient outreach",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "healthcare_voice_ai_dedicated" }
+    },
+    {
+      "key": "thoughtful_ai",
+      "name": "Thoughtful AI",
+      "website": "https://www.thoughtful.ai",
+      "description": "Healthcare revenue cycle automation AI — eligibility, prior auth, and patient scheduling agents",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "revenue_cycle_and_front_desk" }
+    },
+    {
+      "key": "parlance",
+      "name": "Parlance",
+      "website": "https://parlance.com",
+      "description": "Voice AI and natural language IVR for hospitals and health systems — patient self-service calls",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "hospital_ivr_and_voice_ai" }
+    },
+    {
+      "key": "orbita",
+      "name": "Orbita",
+      "website": "https://orbita.ai",
+      "description": "Conversational AI platform for healthcare — voice and chat for patient access, scheduling, FAQs",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "patient_access_conversational_ai" }
+    },
+    {
+      "key": "aiva_health",
+      "name": "Aiva Health",
+      "website": "https://aivahealth.com",
+      "description": "AI voice assistant for hospitals — patients use voice to reach nurses and request services",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "inpatient_voice_ai" }
+    },
+    {
+      "key": "avaamo",
+      "name": "Avaamo",
+      "website": "https://avaamo.ai",
+      "description": "Enterprise conversational AI — large health system deployments for scheduling and triage",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "enterprise_health_systems" }
+    },
+    {
+      "key": "kore_ai",
+      "name": "Kore.ai",
+      "website": "https://kore.ai",
+      "description": "Enterprise AI platform with healthcare voice agent templates for front desk and call center",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "enterprise_contact_center_healthcare" }
+    },
+    {
+      "key": "luma_health",
+      "name": "Luma Health",
+      "website": "https://lumahealth.io",
+      "description": "Patient success platform with AI-powered scheduling, recalls, and automated patient communication",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "patient_engagement_and_scheduling" }
+    },
+    {
+      "key": "klara",
+      "name": "Klara",
+      "website": "https://klara.com",
+      "description": "Patient communication platform — messaging and virtual front desk for medical practices",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "patient_messaging_virtual_front_desk" }
+    },
+    {
+      "key": "relatient",
+      "name": "Relatient",
+      "website": "https://relatient.com",
+      "description": "Patient scheduling and engagement — AI-assisted appointment booking and reminders",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "scheduling_automation" }
+    },
+    {
+      "key": "air_ai",
+      "name": "Air AI",
+      "website": "https://www.air.ai",
+      "description": "AI phone agent platform with 24/7 call handling; pitched heavily to medical and dental offices",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "24_7_ai_phone_agent" }
+    },
+    {
+      "key": "solv_health",
+      "name": "Solv Health",
+      "website": "https://www.solvhealth.com",
+      "description": "Same-day appointment booking and patient intake automation for urgent care and primary care",
+      "category": "voice_ai_healthcare",
+      "fb_page_id": null,
+      "ad_library_url": null,
+      "metadata": { "focus": "same_day_booking_urgent_care" }
+    }
+  ],
+  "discovery": {
+    "_comment": "Keywords used to search Meta Ad Library for undiscovered voice AI healthcare competitors. Runs on every fragment invocation.",
+    "keywords": [
+      "AI receptionist medical",
+      "AI receptionist dental",
+      "voice AI healthcare",
+      "AI front desk medical practice",
+      "AI phone answering healthcare",
+      "AI patient scheduling",
+      "virtual medical receptionist AI",
+      "AI answering service doctor",
+      "AI healthcare automation front desk",
+      "voice AI doctor office"
+    ]
+  }
+}
